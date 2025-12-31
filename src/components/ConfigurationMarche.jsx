@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ShoppingCart, Users, Store, AlertCircle, CheckCircle } from 'lucide-react';
+import { ShoppingCart, Users, Store, AlertCircle, CheckCircle, Minus, Plus } from 'lucide-react';
 import { calculerBesoinHebdo } from '../data/compositionsPaniers';
 
 const ConfigurationMarche = ({ marche, setMarche, marcheValide, setMarcheValide }) => {
@@ -7,6 +7,52 @@ const ConfigurationMarche = ({ marche, setMarche, marcheValide, setMarcheValide 
 
   const handleChange = (field, value) => {
     setMarche(prev => ({ ...prev, [field]: parseFloat(value) || 0 }));
+  };
+
+  // 📱 Composant Stepper pour mobile (boutons +/-)
+  const MobileStepper = ({ value, onChange, min = 0, max = 999, step = 1, color = 'green' }) => {
+    const colorClasses = {
+      green: 'bg-green-600 hover:bg-green-700 active:bg-green-800',
+      blue: 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'
+    };
+    
+    const increment = () => onChange(Math.min(max, (value || 0) + step));
+    const decrement = () => onChange(Math.max(min, (value || 0) - step));
+    
+    const displayValue = value === 0 ? '' : value;
+    
+    const handleInputChange = (e) => {
+      const val = e.target.value;
+      onChange(val === '' ? 0 : (parseInt(val) || 0));
+    };
+
+    return (
+      <div className="flex items-center justify-center space-x-2 sm:hidden">
+        <button
+          type="button"
+          onClick={decrement}
+          className={`w-12 h-12 rounded-full ${colorClasses[color]} text-white flex items-center justify-center shadow-md transition-colors`}
+        >
+          <Minus className="w-6 h-6" />
+        </button>
+        <input
+          type="number"
+          min={min}
+          max={max}
+          value={displayValue}
+          onChange={handleInputChange}
+          placeholder="0"
+          className="w-20 h-12 text-center text-2xl font-bold border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+        />
+        <button
+          type="button"
+          onClick={increment}
+          className={`w-12 h-12 rounded-full ${colorClasses[color]} text-white flex items-center justify-center shadow-md transition-colors`}
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+      </div>
+    );
   };
 
   // Détecter si des modifications sont en attente
@@ -47,41 +93,41 @@ const ConfigurationMarche = ({ marche, setMarche, marcheValide, setMarcheValide 
     bas: {
       tomate: 2.90,
       courgette: 2.00,
-      concombre: 3.75,  // 1.50€/pièce ÷ 0.4kg
+      concombre: 3.75,
       aubergine: 3.50,
       haricot: 10.00,
       mesclun: 14.00,
       verdurette: 12.00,
       carotte: 1.80,
       betterave: 2.50,
-      radis: 6.00,      // 1.80€/botte ÷ 0.3kg
-      basilic: 30.00    // 1.50€/botte ÷ 0.05kg
+      radis: 6.00,
+      basilic: 30.00
     },
     moyen: {
       tomate: 3.80,
       courgette: 3.00,
-      concombre: 5.00,  // 2.00€/pièce ÷ 0.4kg
+      concombre: 5.00,
       aubergine: 4.50,
       haricot: 13.00,
       mesclun: 18.00,
       verdurette: 16.00,
       carotte: 2.50,
       betterave: 3.50,
-      radis: 8.33,      // 2.50€/botte ÷ 0.3kg
-      basilic: 40.00    // 2.00€/botte ÷ 0.05kg
+      radis: 8.33,
+      basilic: 40.00
     },
     haut: {
       tomate: 4.80,
       courgette: 4.50,
-      concombre: 6.25,  // 2.50€/pièce ÷ 0.4kg
+      concombre: 6.25,
       aubergine: 6.00,
       haricot: 16.00,
       mesclun: 24.00,
       verdurette: 22.00,
       carotte: 3.20,
       betterave: 4.50,
-      radis: 10.67,     // 3.20€/botte ÷ 0.3kg
-      basilic: 50.00    // 2.50€/botte ÷ 0.05kg
+      radis: 10.67,
+      basilic: 50.00
     }
   };
 
@@ -105,30 +151,35 @@ const ConfigurationMarche = ({ marche, setMarche, marcheValide, setMarcheValide 
 
   return (
     <div className="space-y-6">
-      {/* Alerte de modifications en attente */}
+      {/* 📱 Alerte de modifications en attente - STICKY sur mobile */}
       {hasChanges && (
-        <div className="bg-orange-50 border-2 border-orange-500 rounded-lg p-6 shadow-lg">
-          <div className="flex items-start space-x-4">
-            <AlertCircle className="w-8 h-8 text-orange-600 flex-shrink-0 mt-1" />
-            <div className="flex-1">
-              <h3 className="text-xl font-bold text-orange-900 mb-2">
-                ⚠️ Modifications Non Validées
-              </h3>
-              <p className="text-orange-800 mb-4">
-                Vous avez modifié les paramètres du marché mais ces changements n'ont pas encore été appliqués. 
-                Les calculs des cultures et résultats utilisent toujours l'ancienne configuration.
-              </p>
-              <button
-                onClick={handleValider}
-                className="w-full bg-orange-600 text-white py-3 px-6 rounded-md font-bold text-lg hover:bg-orange-700 transition-colors flex items-center justify-center space-x-2 shadow-md"
-              >
-                <CheckCircle className="w-5 h-5" />
-                <span>Valider et Recalculer Tout</span>
-              </button>
+        <div className="fixed bottom-0 left-0 right-0 z-50 sm:relative sm:bottom-auto sm:left-auto sm:right-auto sm:z-auto">
+          <div className="bg-orange-50 border-t-4 sm:border-2 border-orange-500 sm:rounded-lg p-4 sm:p-6 shadow-lg">
+            <div className="flex items-center sm:items-start space-x-3 sm:space-x-4">
+              <AlertCircle className="w-6 h-6 sm:w-8 sm:h-8 text-orange-600 flex-shrink-0" />
+              <div className="flex-1">
+                <h3 className="text-base sm:text-xl font-bold text-orange-900 mb-1 sm:mb-2">
+                  ⚠️ Modifications Non Validées
+                </h3>
+                <p className="hidden sm:block text-orange-800 mb-4">
+                  Vous avez modifié les paramètres du marché mais ces changements n'ont pas encore été appliqués. 
+                  Les calculs des cultures et résultats utilisent toujours l'ancienne configuration.
+                </p>
+                <button
+                  onClick={handleValider}
+                  className="w-full bg-orange-600 text-white py-3 px-4 sm:px-6 rounded-md font-bold text-base sm:text-lg hover:bg-orange-700 transition-colors flex items-center justify-center space-x-2 shadow-md"
+                >
+                  <CheckCircle className="w-5 h-5" />
+                  <span>Valider et Recalculer</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
+      
+      {/* 📱 Spacer quand le bloc sticky est affiché sur mobile */}
+      {hasChanges && <div className="h-28 sm:hidden"></div>}
 
       <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
         <div className="flex items-center space-x-3 mb-6">
@@ -151,12 +202,20 @@ const ConfigurationMarche = ({ marche, setMarche, marcheValide, setMarcheValide 
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Nombre de paniers hebdomadaires
                 </label>
+                {/* Desktop : input classique */}
                 <input
                   type="number"
                   min="0"
-                  value={marche.amap}
+                  value={marche.amap === 0 ? '' : marche.amap}
                   onChange={(e) => handleChange('amap', e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="0"
+                  className="hidden sm:block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+                {/* 📱 Mobile : stepper +/- */}
+                <MobileStepper
+                  value={marche.amap}
+                  onChange={(val) => setMarche(prev => ({ ...prev, amap: val }))}
+                  color="green"
                 />
               </div>
 
@@ -253,12 +312,20 @@ const ConfigurationMarche = ({ marche, setMarche, marcheValide, setMarcheValide 
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Nombre de clients hebdomadaires estimés
                 </label>
+                {/* Desktop : input classique */}
                 <input
                   type="number"
                   min="0"
-                  value={marche.marche}
+                  value={marche.marche === 0 ? '' : marche.marche}
                   onChange={(e) => handleChange('marche', e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="0"
+                  className="hidden sm:block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {/* 📱 Mobile : stepper +/- */}
+                <MobileStepper
+                  value={marche.marche}
+                  onChange={(val) => setMarche(prev => ({ ...prev, marche: val }))}
+                  color="blue"
                 />
               </div>
 
@@ -282,12 +349,20 @@ const ConfigurationMarche = ({ marche, setMarche, marcheValide, setMarcheValide 
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Nombre de restaurants
                 </label>
+                {/* Desktop : input classique */}
                 <input
                   type="number"
                   min="0"
-                  value={marche.restaurant}
+                  value={marche.restaurant === 0 ? '' : marche.restaurant}
                   onChange={(e) => handleChange('restaurant', e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="0"
+                  className="hidden sm:block w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {/* 📱 Mobile : stepper +/- */}
+                <MobileStepper
+                  value={marche.restaurant}
+                  onChange={(val) => setMarche(prev => ({ ...prev, restaurant: val }))}
+                  color="blue"
                 />
               </div>
               <p className="text-xs text-gray-600 mt-2">
@@ -876,25 +951,6 @@ const ConfigurationMarche = ({ marche, setMarche, marcheValide, setMarcheValide 
           </div>
         )}
       </div>
-
-      {/* Rappel de validation en bas */}
-      {hasChanges && (
-        <div className="bg-orange-50 border-2 border-orange-500 rounded-lg p-4 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <AlertCircle className="w-6 h-6 text-orange-600" />
-            <p className="text-orange-900 font-medium">
-              N'oubliez pas de valider vos modifications pour mettre à jour les calculs !
-            </p>
-          </div>
-          <button
-            onClick={handleValider}
-            className="bg-orange-600 text-white py-2 px-6 rounded-md font-bold hover:bg-orange-700 transition-colors flex items-center space-x-2"
-          >
-            <CheckCircle className="w-4 h-4" />
-            <span>Valider</span>
-          </button>
-        </div>
-      )}
     </div>
   );
 };
