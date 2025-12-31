@@ -1,35 +1,20 @@
 // SimulateurScenarios.jsx V21 - 4 BLOCS COMPLETS
 // 🎯 Ordre : Contraintes → Objectifs → Scénarios → Fournitures
 // 🆕 V21 : Scénarios cliquables, Fournitures par culture, Calculs automatiques
-// 📱 V22 : Optimisations mobile - blocs repliés + steppers
 
-import React, { useState, useMemo, useEffect } from "react";
-import {
-  Sliders,
-  TrendingUp,
-  AlertTriangle,
-  CheckCircle,
-  Info,
-  ChevronDown,
-  ShoppingCart,
-  Home,
-  Leaf,
-  Package,
-  DollarSign,
-  Sprout,
-  Shield,
-  Bug,
-  Settings,
-  Minus,
-  Plus,
-} from "lucide-react";
-import { NIVEAUX_MATURITE, SAISON } from "../utils/constantes";
-import {
-  genererScenariosViables,
-  calculerImpact,
-  estimerCA,
-} from "../utils/calculScenarios";
-import { cultures as catalogueCultures } from "../data/cultures";
+import React, { useState, useMemo, useEffect } from 'react';
+import { 
+  Sliders, TrendingUp, AlertTriangle, CheckCircle, Info,
+  ChevronDown, ShoppingCart, Home, Leaf, Package,
+  DollarSign, Sprout, Shield, Bug, Settings
+} from 'lucide-react';
+import { NIVEAUX_MATURITE, SAISON } from '../utils/constantes';
+import { 
+  genererScenariosViables, 
+  calculerImpact, 
+  estimerCA 
+} from '../utils/calculScenarios';
+import { cultures as catalogueCultures } from '../data/cultures';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DONNÉES FOURNITURES PAR DÉFAUT (modifiables)
@@ -38,31 +23,31 @@ import { cultures as catalogueCultures } from "../data/cultures";
 const PRIX_FOURNITURES = {
   // Semences & Plants
   semences: {
-    prixGraine: 0.01, // €/graine moyenne
-    prixPlant: 0.35, // €/plant si achat externe
-    prixPlateau128: 3.5, // €/plateau 128 alvéoles
-    prixPlateau72: 4.0, // €/plateau 72 alvéoles
-    prixSubstrat: 0.5, // €/litre
+    prixGraine: 0.01,        // €/graine moyenne
+    prixPlant: 0.35,         // €/plant si achat externe
+    prixPlateau128: 3.50,    // €/plateau 128 alvéoles
+    prixPlateau72: 4.00,     // €/plateau 72 alvéoles
+    prixSubstrat: 0.50       // €/litre
   },
   // Fertilisation
   fertilisation: {
-    compost: 0.2, // €/m²
-    amendement: 0.05, // €/m²
-    engraisFoliaire: 0.02, // €/m²
+    compost: 0.20,           // €/m²
+    amendement: 0.05,        // €/m²
+    engraisFoliaire: 0.02    // €/m²
   },
   // Protection & Couverture
   protection: {
-    bachePlastique: 12, // €/planche (amortie sur 3 ans)
-    toileTissee: 15, // €/planche (amortie sur 5 ans)
-    voileP17: 8, // €/planche (amortie sur 2 ans)
-    filetInsectes: 20, // €/planche (amortie sur 4 ans)
+    bachePlastique: 12,      // €/planche (amortie sur 3 ans)
+    toileTissee: 15,         // €/planche (amortie sur 5 ans)
+    voileP17: 8,             // €/planche (amortie sur 2 ans)
+    filetInsectes: 20        // €/planche (amortie sur 4 ans)
   },
   // Bio-traitement
   biotraitement: {
-    bt: 0.5, // €/planche/saison
-    soufreCuivre: 0.3, // €/planche/saison
-    purins: 0.1, // €/planche/saison (fait maison)
-  },
+    bt: 0.50,                // €/planche/saison
+    soufreCuivre: 0.30,      // €/planche/saison
+    purins: 0.10             // €/planche/saison (fait maison)
+  }
 };
 
 // Mapping cultures → besoins protection (depuis chartes)
@@ -78,7 +63,7 @@ const BESOINS_PROTECTION = {
   carotte: { voileP17: true, filetInsectes: true },
   betterave: { toileTissee: true },
   basilic: { toileTissee: true },
-  verdurette: { voileP17: true },
+  verdurette: { voileP17: true }
 };
 
 // Mapping cultures → besoins bio-traitement
@@ -93,61 +78,37 @@ const BESOINS_BIOTRAITEMENT = {
   radis: { bt: true },
   carotte: { purins: true },
   betterave: { purins: true },
-  basilic: { soufreCuivre: true },
+  basilic: { soufreCuivre: true }
 };
 
-const SimulateurScenarios = ({
-  marche,
-  setMarcheValide,
-  jardins,
-  niveauMaturite,
+const SimulateurScenarios = ({ 
+  marche, 
+  setMarcheValide, 
+  jardins, 
+  niveauMaturite, 
   setNiveauMaturite,
   culturesSelectionnees = [],
   fournitures,
-  setFournitures,
+  setFournitures
 }) => {
   // ═══════════════════════════════════════════════════════════════════════
   // ÉTATS LOCAUX
   // ═══════════════════════════════════════════════════════════════════════
-
-  // 📱 Détection mobile pour état initial des accordéons
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 640);
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
-
-  // Accordéons - fermés par défaut sur mobile, ouverts sur desktop
+  
+  // Accordéons
   const [accordeons, setAccordeons] = useState({
     contraintes: true,
     objectifs: true,
     scenarios: true,
-    fournitures: true,
+    fournitures: true
   });
-
-  // 📱 Fermer les accordéons sur mobile au premier chargement
-  useEffect(() => {
-    if (isMobile) {
-      setAccordeons({
-        contraintes: false,
-        objectifs: false,
-        scenarios: false,
-        fournitures: false,
-      });
-    }
-  }, [isMobile]);
-
-  const toggle = (id) =>
-    setAccordeons((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggle = (id) => setAccordeons(prev => ({ ...prev, [id]: !prev[id] }));
 
   // Valeurs des sliders (modifiables en temps réel)
   const [slidersMarche, setSlidersMarche] = useState({
     amap: marche.amap || 0,
     marche: marche.marche || 0,
-    restaurant: marche.restaurant || 0,
+    restaurant: marche.restaurant || 0
   });
 
   // Scénario actuellement sélectionné
@@ -161,66 +122,9 @@ const SimulateurScenarios = ({
     setSlidersMarche({
       amap: marche.amap || 0,
       marche: marche.marche || 0,
-      restaurant: marche.restaurant || 0,
+      restaurant: marche.restaurant || 0
     });
   }, [marche]);
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // 📱 COMPOSANT STEPPER MOBILE
-  // ═══════════════════════════════════════════════════════════════════════
-
-  const MobileStepper = ({
-    value,
-    onChange,
-    min = 0,
-    max = 100,
-    step = 1,
-    color = "blue",
-  }) => {
-    const colorClasses = {
-      blue: "bg-blue-600 hover:bg-blue-700 active:bg-blue-800",
-      green: "bg-green-600 hover:bg-green-700 active:bg-green-800",
-      orange: "bg-orange-600 hover:bg-orange-700 active:bg-orange-800",
-    };
-
-    const increment = () => onChange(Math.min(max, (value || 0) + step));
-    const decrement = () => onChange(Math.max(min, (value || 0) - step));
-
-    const displayValue = value === 0 ? "" : value;
-
-    const handleInputChange = (e) => {
-      const val = e.target.value;
-      onChange(val === "" ? 0 : parseInt(val) || 0);
-    };
-
-    return (
-      <div className="flex items-center justify-center space-x-3 sm:hidden">
-        <button
-          type="button"
-          onClick={decrement}
-          className={`w-12 h-12 rounded-full ${colorClasses[color]} text-white flex items-center justify-center shadow-md transition-colors`}
-        >
-          <Minus className="w-6 h-6" />
-        </button>
-        <input
-          type="number"
-          min={min}
-          max={max}
-          value={displayValue}
-          onChange={handleInputChange}
-          placeholder="0"
-          className="w-20 h-12 text-center text-2xl font-bold border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-        />
-        <button
-          type="button"
-          onClick={increment}
-          className={`w-12 h-12 rounded-full ${colorClasses[color]} text-white flex items-center justify-center shadow-md transition-colors`}
-        >
-          <Plus className="w-6 h-6" />
-        </button>
-      </div>
-    );
-  };
 
   // ═══════════════════════════════════════════════════════════════════════
   // CALCULS
@@ -233,26 +137,19 @@ const SimulateurScenarios = ({
 
   // Surface totale
   const surfaceTotale = useMemo(() => {
-    return jardins.reduce(
-      (sum, j) => sum + j.nombrePlanches * j.longueurPlanche * 0.8,
-      0
-    );
+    return jardins.reduce((sum, j) => sum + (j.nombrePlanches * j.longueurPlanche * 0.8), 0);
   }, [jardins]);
 
   // Configuration niveau
-  const niveauConfig =
-    NIVEAUX_MATURITE[niveauMaturite] || NIVEAUX_MATURITE.debutant;
+  const niveauConfig = NIVEAUX_MATURITE[niveauMaturite] || NIVEAUX_MATURITE.debutant;
 
   // Marché actuel (depuis sliders)
-  const marcheActuel = useMemo(
-    () => ({
-      ...marche,
-      amap: slidersMarche.amap,
-      marche: slidersMarche.marche,
-      restaurant: slidersMarche.restaurant,
-    }),
-    [marche, slidersMarche]
-  );
+  const marcheActuel = useMemo(() => ({
+    ...marche,
+    amap: slidersMarche.amap,
+    marche: slidersMarche.marche,
+    restaurant: slidersMarche.restaurant
+  }), [marche, slidersMarche]);
 
   // Impact temps réel
   const impact = useMemo(() => {
@@ -263,9 +160,7 @@ const SimulateurScenarios = ({
   // Scénarios viables
   const scenarios = useMemo(() => {
     if (capacitePlanches === 0) return [];
-    return genererScenariosViables(marcheActuel, capacitePlanches, {
-      niveauMaturite,
-    });
+    return genererScenariosViables(marcheActuel, capacitePlanches, { niveauMaturite });
   }, [marcheActuel, capacitePlanches, niveauMaturite]);
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -280,15 +175,16 @@ const SimulateurScenarios = ({
         fertilisation: 0,
         protection: 0,
         biotraitement: 0,
-        total: 0,
-      },
+        total: 0
+      }
     };
 
     // Si pas de cultures sélectionnées, calculer sur le catalogue
-    const culturesACalculer =
-      culturesSelectionnees.length > 0 ? culturesSelectionnees : [];
+    const culturesACalculer = culturesSelectionnees.length > 0 
+      ? culturesSelectionnees 
+      : [];
 
-    culturesACalculer.forEach((culture) => {
+    culturesACalculer.forEach(culture => {
       const id = culture.id;
       const planches = culture.totalPlanches || 1;
       const series = culture.series?.length || 1;
@@ -296,104 +192,104 @@ const SimulateurScenarios = ({
       const surfaceCulture = planches * longueur * 0.8;
 
       // Données de la culture depuis le catalogue
-      const catalogueData = catalogueCultures.find((c) => c.id === id) || {};
-
+      const catalogueData = catalogueCultures.find(c => c.id === id) || {};
+      
       // 1. SEMENCES & PLANTS
       const densiteSemis = catalogueData.semis?.densite || 100;
       const grainesNecessaires = densiteSemis * planches * series;
       const plateauxType = catalogueData.pepiniere?.typeContenant || 128;
-      const nbPlateaux = Math.ceil(grainesNecessaires / plateauxType);
+      const plateauxParPlanche = catalogueData.pepiniere?.plateauxParPlanche30m || 2;
+      const nombrePlateaux = Math.ceil((planches * plateauxParPlanche * (longueur / 30)) * series);
+      const substratLitres = catalogueData.dureeEnPepiniere > 0 ? nombrePlateaux * 5 : 0;
 
-      let coutSemences = 0;
-      if (catalogueData.semis?.type === "direct") {
-        coutSemences =
-          grainesNecessaires * PRIX_FOURNITURES.semences.prixGraine;
-      } else {
-        coutSemences =
-          nbPlateaux *
-          (plateauxType === 128
-            ? PRIX_FOURNITURES.semences.prixPlateau128
-            : PRIX_FOURNITURES.semences.prixPlateau72);
-        coutSemences += nbPlateaux * 2 * PRIX_FOURNITURES.semences.prixSubstrat;
-      }
+      const coutSemences = {
+        graines: Math.round(grainesNecessaires * PRIX_FOURNITURES.semences.prixGraine * 100) / 100,
+        plateaux: Math.round(nombrePlateaux * (plateauxType === 128 ? PRIX_FOURNITURES.semences.prixPlateau128 : PRIX_FOURNITURES.semences.prixPlateau72) * 100) / 100,
+        substrat: Math.round(substratLitres * PRIX_FOURNITURES.semences.prixSubstrat * 100) / 100,
+        total: 0
+      };
+      coutSemences.total = coutSemences.graines + coutSemences.plateaux + coutSemences.substrat;
 
       // 2. FERTILISATION
-      const coutFertilisation =
-        surfaceCulture *
-        (PRIX_FOURNITURES.fertilisation.compost +
-          PRIX_FOURNITURES.fertilisation.amendement +
-          PRIX_FOURNITURES.fertilisation.engraisFoliaire);
+      const coutFertilisation = {
+        compost: Math.round(surfaceCulture * PRIX_FOURNITURES.fertilisation.compost * 100) / 100,
+        amendement: Math.round(surfaceCulture * PRIX_FOURNITURES.fertilisation.amendement * 100) / 100,
+        foliaire: Math.round(surfaceCulture * PRIX_FOURNITURES.fertilisation.engraisFoliaire * 100) / 100,
+        total: 0
+      };
+      coutFertilisation.total = coutFertilisation.compost + coutFertilisation.amendement + coutFertilisation.foliaire;
 
       // 3. PROTECTION
-      let coutProtection = 0;
       const besoinsProtection = BESOINS_PROTECTION[id] || {};
-      if (besoinsProtection.bachePlastique)
-        coutProtection +=
-          (PRIX_FOURNITURES.protection.bachePlastique / 3) * planches;
-      if (besoinsProtection.toileTissee)
-        coutProtection +=
-          (PRIX_FOURNITURES.protection.toileTissee / 5) * planches;
-      if (besoinsProtection.voileP17)
-        coutProtection += (PRIX_FOURNITURES.protection.voileP17 / 2) * planches;
-      if (besoinsProtection.filetInsectes)
-        coutProtection +=
-          (PRIX_FOURNITURES.protection.filetInsectes / 4) * planches;
+      const coutProtection = {
+        bachePlastique: besoinsProtection.bachePlastique ? Math.round(planches * PRIX_FOURNITURES.protection.bachePlastique / 3 * 100) / 100 : 0,
+        toileTissee: besoinsProtection.toileTissee ? Math.round(planches * PRIX_FOURNITURES.protection.toileTissee / 5 * 100) / 100 : 0,
+        voileP17: besoinsProtection.voileP17 ? Math.round(planches * PRIX_FOURNITURES.protection.voileP17 / 2 * 100) / 100 : 0,
+        filetInsectes: besoinsProtection.filetInsectes ? Math.round(planches * PRIX_FOURNITURES.protection.filetInsectes / 4 * 100) / 100 : 0,
+        total: 0
+      };
+      coutProtection.total = coutProtection.bachePlastique + coutProtection.toileTissee + coutProtection.voileP17 + coutProtection.filetInsectes;
 
-      // 4. BIOTRAITEMENT
-      let coutBiotraitement = 0;
+      // 4. BIO-TRAITEMENT
       const besoinsBio = BESOINS_BIOTRAITEMENT[id] || {};
-      if (besoinsBio.bt)
-        coutBiotraitement += PRIX_FOURNITURES.biotraitement.bt * planches;
-      if (besoinsBio.soufreCuivre)
-        coutBiotraitement +=
-          PRIX_FOURNITURES.biotraitement.soufreCuivre * planches;
-      if (besoinsBio.purins)
-        coutBiotraitement += PRIX_FOURNITURES.biotraitement.purins * planches;
+      const coutBiotraitement = {
+        bt: besoinsBio.bt ? Math.round(planches * PRIX_FOURNITURES.biotraitement.bt * 100) / 100 : 0,
+        soufreCuivre: besoinsBio.soufreCuivre ? Math.round(planches * PRIX_FOURNITURES.biotraitement.soufreCuivre * 100) / 100 : 0,
+        purins: besoinsBio.purins ? Math.round(planches * PRIX_FOURNITURES.biotraitement.purins * 100) / 100 : 0,
+        total: 0
+      };
+      coutBiotraitement.total = coutBiotraitement.bt + coutBiotraitement.soufreCuivre + coutBiotraitement.purins;
 
-      // Appliquer ajustements manuels
+      // Appliquer ajustements manuels si présents
       const ajust = ajustementsFournitures[id] || {};
-      const semencesFinal = ajust.semences ?? coutSemences;
-      const fertilisationFinal = ajust.fertilisation ?? coutFertilisation;
-      const protectionFinal = ajust.protection ?? coutProtection;
-      const biotraitementFinal = ajust.biotraitement ?? coutBiotraitement;
+      const semencesAjuste = ajust.semences ?? coutSemences.total;
+      const fertilisationAjuste = ajust.fertilisation ?? coutFertilisation.total;
+      const protectionAjuste = ajust.protection ?? coutProtection.total;
+      const biotraitementAjuste = ajust.biotraitement ?? coutBiotraitement.total;
+
+      // Total culture
+      const totalCulture = semencesAjuste + fertilisationAjuste + protectionAjuste + biotraitementAjuste;
 
       result.parCulture[id] = {
         nom: culture.nom || catalogueData.nom || id,
         planches,
-        semences: semencesFinal,
-        fertilisation: fertilisationFinal,
-        protection: protectionFinal,
-        biotraitement: biotraitementFinal,
-        total:
-          semencesFinal +
-          fertilisationFinal +
-          protectionFinal +
-          biotraitementFinal,
-        ajuste: {
-          semences: ajust.semences !== undefined,
-          fertilisation: ajust.fertilisation !== undefined,
-          protection: ajust.protection !== undefined,
-          biotraitement: ajust.biotraitement !== undefined,
+        series,
+        semences: {
+          ...coutSemences,
+          ajuste: semencesAjuste,
+          detail: { graines: grainesNecessaires, plateaux: nombrePlateaux, substrat: substratLitres }
         },
+        fertilisation: {
+          ...coutFertilisation,
+          ajuste: fertilisationAjuste
+        },
+        protection: {
+          ...coutProtection,
+          ajuste: protectionAjuste,
+          besoins: besoinsProtection
+        },
+        biotraitement: {
+          ...coutBiotraitement,
+          ajuste: biotraitementAjuste,
+          besoins: besoinsBio
+        },
+        total: totalCulture
       };
 
-      result.totaux.semences += semencesFinal;
-      result.totaux.fertilisation += fertilisationFinal;
-      result.totaux.protection += protectionFinal;
-      result.totaux.biotraitement += biotraitementFinal;
-      result.totaux.total +=
-        semencesFinal +
-        fertilisationFinal +
-        protectionFinal +
-        biotraitementFinal;
+      // Ajouter aux totaux
+      result.totaux.semences += semencesAjuste;
+      result.totaux.fertilisation += fertilisationAjuste;
+      result.totaux.protection += protectionAjuste;
+      result.totaux.biotraitement += biotraitementAjuste;
+      result.totaux.total += totalCulture;
     });
 
     return result;
   }, [culturesSelectionnees, ajustementsFournitures]);
 
-  // Synchroniser fournitures avec parent
+  // Mettre à jour fournitures parent
   useEffect(() => {
-    if (setFournitures && fournituresCalculees.totaux.total > 0) {
+    if (setFournitures) {
       setFournitures(fournituresCalculees);
     }
   }, [fournituresCalculees, setFournitures]);
@@ -402,51 +298,53 @@ const SimulateurScenarios = ({
   // HANDLERS
   // ═══════════════════════════════════════════════════════════════════════
 
+  // Mise à jour slider
   const handleSliderChange = (field, value) => {
-    const numValue = parseInt(value) || 0;
-    setSlidersMarche((prev) => ({ ...prev, [field]: numValue }));
+    setSlidersMarche(prev => ({ ...prev, [field]: parseInt(value) || 0 }));
+    setScenarioSelectionne(null); // Désélectionner le scénario
   };
 
-  const handleAppliquerMarche = () => {
-    if (setMarcheValide) {
-      setMarcheValide({
-        ...marche,
-        amap: slidersMarche.amap,
-        marche: slidersMarche.marche,
-        restaurant: slidersMarche.restaurant,
-      });
-      alert("✅ Marché mis à jour ! Les calculs ont été recalculés.");
-    }
+  // Appliquer les valeurs des sliders au marché global
+  const appliquerMarche = () => {
+    setMarcheValide({
+      ...marche,
+      amap: slidersMarche.amap,
+      marche: slidersMarche.marche,
+      restaurant: slidersMarche.restaurant
+    });
   };
 
-  const handleSelectionScenario = (scenario) => {
-    setScenarioSelectionne(scenario);
+  // 🆕 V21 : Sélectionner un scénario (pré-remplit les sliders)
+  const selectionnerScenario = (scenario) => {
+    setScenarioSelectionne(scenario.id);
     setSlidersMarche({
-      amap: scenario.amap,
-      marche: scenario.marche,
-      restaurant: scenario.restaurant,
+      amap: scenario.marche.amap,
+      marche: scenario.marche.marche,
+      restaurant: scenario.marche.restaurant
+    });
+    // Appliquer directement au marché global
+    setMarcheValide({
+      ...marche,
+      amap: scenario.marche.amap,
+      marche: scenario.marche.marche,
+      restaurant: scenario.marche.restaurant
     });
   };
 
-  const handleAjusterFourniture = (cultureId, categorie, valeur) => {
-    setAjustementsFournitures((prev) => {
-      const newAjust = { ...prev };
-      if (!newAjust[cultureId]) newAjust[cultureId] = {};
-
-      if (valeur === null) {
-        delete newAjust[cultureId][categorie];
-        if (Object.keys(newAjust[cultureId]).length === 0) {
-          delete newAjust[cultureId];
-        }
-      } else {
-        newAjust[cultureId][categorie] = valeur;
+  // Ajuster manuellement une fourniture
+  const ajusterFourniture = (cultureId, categorie, valeur) => {
+    setAjustementsFournitures(prev => ({
+      ...prev,
+      [cultureId]: {
+        ...(prev[cultureId] || {}),
+        [categorie]: parseFloat(valeur) || 0
       }
-      return newAjust;
-    });
+    }));
   };
 
-  const handleResetAjustement = (cultureId, categorie) => {
-    setAjustementsFournitures((prev) => {
+  // Réinitialiser un ajustement
+  const reinitialiserAjustement = (cultureId, categorie) => {
+    setAjustementsFournitures(prev => {
       const newAjust = { ...prev };
       if (newAjust[cultureId]) {
         delete newAjust[cultureId][categorie];
@@ -462,29 +360,20 @@ const SimulateurScenarios = ({
   // COMPOSANT SECTION ACCORDÉON
   // ═══════════════════════════════════════════════════════════════════════
 
-  const Section = ({
-    id,
-    title,
-    icon: Icon,
-    children,
-    badge = null,
-    color = "gray",
-  }) => {
+  const Section = ({ id, title, icon: Icon, children, badge = null, color = 'gray' }) => {
     const isOpen = accordeons[id];
     const colors = {
-      gray: "border-gray-200 bg-gray-50",
-      green: "border-green-300 bg-green-50",
-      blue: "border-blue-300 bg-blue-50",
-      purple: "border-purple-300 bg-purple-50",
-      orange: "border-orange-300 bg-orange-50",
+      gray: 'border-gray-200 bg-gray-50',
+      green: 'border-green-300 bg-green-50',
+      blue: 'border-blue-300 bg-blue-50',
+      purple: 'border-purple-300 bg-purple-50',
+      orange: 'border-orange-300 bg-orange-50'
     };
-
+    
     return (
-      <div
-        className={`border-2 rounded-xl overflow-hidden mb-4 ${colors[color]}`}
-      >
-        <button
-          onClick={() => toggle(id)}
+      <div className={`border-2 rounded-xl overflow-hidden mb-4 ${colors[color]}`}>
+        <button 
+          onClick={() => toggle(id)} 
           className="w-full p-4 flex items-center justify-between hover:bg-white/50 transition-colors text-left"
         >
           <span className="font-bold text-lg text-gray-900 flex items-center">
@@ -492,16 +381,8 @@ const SimulateurScenarios = ({
             {title}
           </span>
           <div className="flex items-center space-x-2">
-            {badge && (
-              <span className="text-xs bg-white px-2 py-1 rounded font-medium">
-                {badge}
-              </span>
-            )}
-            <ChevronDown
-              className={`w-6 h-6 text-gray-500 transition-transform ${
-                isOpen ? "rotate-180" : ""
-              }`}
-            />
+            {badge && <span className="text-xs bg-white px-2 py-1 rounded font-medium">{badge}</span>}
+            <ChevronDown className={`w-6 h-6 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
           </div>
         </button>
         {isOpen && <div className="p-4 bg-white border-t">{children}</div>}
@@ -517,16 +398,12 @@ const SimulateurScenarios = ({
     return (
       <div className="bg-white rounded-lg shadow-md p-12 text-center">
         <Home className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-        <h3 className="text-xl font-bold text-gray-700 mb-2">
-          Aucun jardin configuré
-        </h3>
+        <h3 className="text-xl font-bold text-gray-700 mb-2">Aucun jardin configuré</h3>
         <p className="text-gray-500 mb-4">
-          Pour utiliser le simulateur, commencez par configurer vos jardins dans
-          l'onglet "Jardins".
+          Pour utiliser le simulateur, commencez par configurer vos jardins dans l'onglet "Jardins".
         </p>
         <p className="text-sm text-gray-400">
-          Définissez le nombre de planches et leur longueur pour calculer votre
-          capacité de production.
+          Définissez le nombre de planches et leur longueur pour calculer votre capacité de production.
         </p>
       </div>
     );
@@ -541,13 +418,7 @@ const SimulateurScenarios = ({
       {/* ════════════════════════════════════════════════════════════════════
           BLOC 1 : VOS CONTRAINTES
           ════════════════════════════════════════════════════════════════════ */}
-      <Section
-        id="contraintes"
-        title="Vos Contraintes"
-        icon={Settings}
-        color="gray"
-        badge={`${capacitePlanches} planches`}
-      >
+      <Section id="contraintes" title="Vos Contraintes" icon={Settings} color="gray" badge={`${capacitePlanches} planches`}>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Marché configuré */}
           <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
@@ -571,20 +442,17 @@ const SimulateurScenarios = ({
             </div>
           </div>
 
-          {/*  Capacité disponible */}
+          {/* Capacité disponible */}
           <div className="bg-green-50 rounded-lg p-4 border border-green-200">
             <h4 className="font-semibold text-green-800 mb-3 flex items-center">
               <Home className="w-4 h-4 mr-2" />
               Capacité Disponible
             </h4>
             <div className="text-center">
-              <div className="text-4xl font-bold text-green-600">
-                {capacitePlanches}
-              </div>
+              <div className="text-4xl font-bold text-green-600">{capacitePlanches}</div>
               <div className="text-sm text-gray-600">Planches totales</div>
               <div className="text-xs text-gray-500 mt-1">
-                {jardins.length} jardin{jardins.length > 1 ? "s" : ""} •{" "}
-                {surfaceTotale.toFixed(0)} m²
+                {jardins.length} jardin{jardins.length > 1 ? 's' : ''} • {surfaceTotale.toFixed(0)} m²
               </div>
             </div>
           </div>
@@ -602,21 +470,18 @@ const SimulateurScenarios = ({
                   onClick={() => setNiveauMaturite(key)}
                   className={`p-2 rounded-lg text-center transition-all ${
                     niveauMaturite === key
-                      ? "ring-2 ring-offset-1 shadow-md"
-                      : "opacity-60 hover:opacity-100"
+                      ? 'ring-2 ring-offset-1 shadow-md'
+                      : 'opacity-60 hover:opacity-100'
                   }`}
                   style={{
-                    backgroundColor:
-                      niveauMaturite === key ? config.couleur + "30" : "white",
+                    backgroundColor: niveauMaturite === key ? config.couleur + '30' : 'white',
                     borderColor: config.couleur,
-                    ringColor: config.couleur,
+                    ringColor: config.couleur
                   }}
                 >
                   <div className="text-xl">{config.icone}</div>
                   <div className="text-xs font-medium">{config.label}</div>
-                  <div className="text-xs text-gray-500">
-                    ×{config.coefficient}
-                  </div>
+                  <div className="text-xs text-gray-500">×{config.coefficient}</div>
                 </button>
               ))}
             </div>
@@ -627,19 +492,12 @@ const SimulateurScenarios = ({
       {/* ════════════════════════════════════════════════════════════════════
           BLOC 2 : AJUSTEZ VOS OBJECTIFS MARCHÉ
           ════════════════════════════════════════════════════════════════════ */}
-      <Section
-        id="objectifs"
-        title="Ajustez Vos Objectifs Marché"
-        icon={Sliders}
-        color="blue"
-        badge="Temps réel"
-      >
+      <Section id="objectifs" title="Ajustez Vos Objectifs Marché" icon={Sliders} color="blue" badge="Temps réel">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Sliders */}
           <div className="space-y-4">
             <p className="text-sm text-gray-600 mb-4">
-              Modifiez les curseurs et voyez l'impact en temps réel sur vos
-              besoins en planches.
+              Modifiez les curseurs et voyez l'impact en temps réel sur vos besoins en planches.
             </p>
 
             {/* Slider AMAP */}
@@ -649,35 +507,25 @@ const SimulateurScenarios = ({
                   <ShoppingCart className="w-4 h-4 mr-2 text-blue-500" />
                   Paniers AMAP
                 </label>
-                {/* Desktop : affichage valeur */}
-                <div className="hidden sm:flex items-center space-x-2">
+                <div className="flex items-center space-x-2">
                   <input
                     type="number"
                     min="0"
                     max="100"
-                    value={slidersMarche.amap === 0 ? "" : slidersMarche.amap}
-                    onChange={(e) => handleSliderChange("amap", e.target.value)}
-                    placeholder="0"
+                    value={slidersMarche.amap}
+                    onChange={(e) => handleSliderChange('amap', e.target.value)}
                     className="w-16 px-2 py-1 border rounded text-center font-bold"
                   />
                   <span className="text-gray-500 text-sm">paniers</span>
                 </div>
               </div>
-              {/* 📱 Mobile : stepper */}
-              <MobileStepper
-                value={slidersMarche.amap}
-                onChange={(val) => handleSliderChange("amap", val)}
-                max={100}
-                color="blue"
-              />
-              {/* Desktop : slider */}
               <input
                 type="range"
                 min="0"
                 max="100"
                 value={slidersMarche.amap}
-                onChange={(e) => handleSliderChange("amap", e.target.value)}
-                className="hidden sm:block w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
+                onChange={(e) => handleSliderChange('amap', e.target.value)}
+                className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
               />
             </div>
 
@@ -688,39 +536,25 @@ const SimulateurScenarios = ({
                   <TrendingUp className="w-4 h-4 mr-2 text-green-500" />
                   Ventes Marché
                 </label>
-                {/* Desktop : affichage valeur */}
-                <div className="hidden sm:flex items-center space-x-2">
+                <div className="flex items-center space-x-2">
                   <input
                     type="number"
                     min="0"
                     max="100"
-                    value={
-                      slidersMarche.marche === 0 ? "" : slidersMarche.marche
-                    }
-                    onChange={(e) =>
-                      handleSliderChange("marche", e.target.value)
-                    }
-                    placeholder="0"
+                    value={slidersMarche.marche}
+                    onChange={(e) => handleSliderChange('marche', e.target.value)}
                     className="w-16 px-2 py-1 border rounded text-center font-bold"
                   />
                   <span className="text-gray-500 text-sm">unités</span>
                 </div>
               </div>
-              {/* 📱 Mobile : stepper */}
-              <MobileStepper
-                value={slidersMarche.marche}
-                onChange={(val) => handleSliderChange("marche", val)}
-                max={100}
-                color="green"
-              />
-              {/* Desktop : slider */}
               <input
                 type="range"
                 min="0"
                 max="100"
                 value={slidersMarche.marche}
-                onChange={(e) => handleSliderChange("marche", e.target.value)}
-                className="hidden sm:block w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer"
+                onChange={(e) => handleSliderChange('marche', e.target.value)}
+                className="w-full h-2 bg-green-200 rounded-lg appearance-none cursor-pointer"
               />
             </div>
 
@@ -731,43 +565,25 @@ const SimulateurScenarios = ({
                   <Home className="w-4 h-4 mr-2 text-orange-500" />
                   Restaurants
                 </label>
-                {/* Desktop : affichage valeur */}
-                <div className="hidden sm:flex items-center space-x-2">
+                <div className="flex items-center space-x-2">
                   <input
                     type="number"
                     min="0"
                     max="20"
-                    value={
-                      slidersMarche.restaurant === 0
-                        ? ""
-                        : slidersMarche.restaurant
-                    }
-                    onChange={(e) =>
-                      handleSliderChange("restaurant", e.target.value)
-                    }
-                    placeholder="0"
+                    value={slidersMarche.restaurant}
+                    onChange={(e) => handleSliderChange('restaurant', e.target.value)}
                     className="w-16 px-2 py-1 border rounded text-center font-bold"
                   />
                   <span className="text-gray-500 text-sm">unités</span>
                 </div>
               </div>
-              {/* 📱 Mobile : stepper */}
-              <MobileStepper
-                value={slidersMarche.restaurant}
-                onChange={(val) => handleSliderChange("restaurant", val)}
-                max={20}
-                color="orange"
-              />
-              {/* Desktop : slider */}
               <input
                 type="range"
                 min="0"
                 max="20"
                 value={slidersMarche.restaurant}
-                onChange={(e) =>
-                  handleSliderChange("restaurant", e.target.value)
-                }
-                className="hidden sm:block w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer"
+                onChange={(e) => handleSliderChange('restaurant', e.target.value)}
+                className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer"
               />
             </div>
           </div>
@@ -795,62 +611,61 @@ const SimulateurScenarios = ({
                 {/* Jauge de remplissage */}
                 <div className="mb-4">
                   <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-600">
-                      Utilisation des planches
-                    </span>
-                    <span
-                      className={`font-bold ${
-                        impact.viable ? "text-green-600" : "text-red-600"
-                      }`}
-                    >
+                    <span className="text-gray-600">Utilisation des planches</span>
+                    <span className={`font-bold ${impact.viable ? 'text-green-600' : 'text-red-600'}`}>
                       {impact.planchesNecessaires} / {capacitePlanches}
                     </span>
                   </div>
                   <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-500 ${
-                        impact.tauxRemplissage > 100
-                          ? "bg-red-500"
-                          : impact.tauxRemplissage > 85
-                          ? "bg-orange-500"
-                          : "bg-green-500"
+                    <div 
+                      className={`h-full transition-all duration-300 ${
+                        impact.tauxRemplissage > 100 ? 'bg-red-500' :
+                        impact.tauxRemplissage > 90 ? 'bg-orange-500' :
+                        impact.tauxRemplissage > 70 ? 'bg-green-500' : 'bg-blue-500'
                       }`}
-                      style={{
-                        width: `${Math.min(impact.tauxRemplissage, 100)}%`,
-                      }}
+                      style={{ width: `${Math.min(100, impact.tauxRemplissage)}%` }}
                     />
                   </div>
-                  <div className="text-center text-sm mt-1 text-gray-500">
-                    {impact.tauxRemplissage.toFixed(0)}% utilisé
+                  <div className="text-center text-sm text-gray-500 mt-1">
+                    {impact.tauxRemplissage}% utilisé
                   </div>
                 </div>
 
-                {/* Stats rapides */}
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="bg-white rounded-lg p-3 border">
-                    <div className="text-gray-500 text-xs">
-                      Planches nécessaires
-                    </div>
-                    <div className="font-bold text-lg text-blue-600">
+                {/* KPIs */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white rounded-lg p-3 text-center border">
+                    <div className="text-xs text-gray-500">Planches nécessaires</div>
+                    <div className={`text-2xl font-bold ${impact.viable ? 'text-green-600' : 'text-red-600'}`}>
                       {impact.planchesNecessaires}
                     </div>
                   </div>
-                  <div className="bg-white rounded-lg p-3 border">
-                    <div className="text-gray-500 text-xs">CA Potentiel</div>
-                    <div className="font-bold text-lg text-green-600">
-                      {estimerCA(marcheActuel).toLocaleString()} €
+                  <div className="bg-white rounded-lg p-3 text-center border">
+                    <div className="text-xs text-gray-500">CA Potentiel</div>
+                    <div className="text-2xl font-bold text-blue-600">
+                      {impact.caEstime?.toLocaleString('fr-FR')}€
                     </div>
                   </div>
                 </div>
 
-                {/* Bouton Appliquer */}
-                <button
-                  onClick={handleAppliquerMarche}
-                  className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
-                >
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  Appliquer ces valeurs
-                </button>
+                {/* Conseils */}
+                {impact.conseils && impact.conseils.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    {impact.conseils.map((conseil, i) => (
+                      <div 
+                        key={i}
+                        className={`text-sm p-2 rounded flex items-start ${
+                          conseil.type === 'error' ? 'bg-red-50 text-red-700' :
+                          conseil.type === 'warning' ? 'bg-orange-50 text-orange-700' :
+                          conseil.type === 'success' ? 'bg-green-50 text-green-700' :
+                          'bg-blue-50 text-blue-700'
+                        }`}
+                      >
+                        <Info className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
+                        {conseil.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -860,315 +675,242 @@ const SimulateurScenarios = ({
       {/* ════════════════════════════════════════════════════════════════════
           BLOC 3 : SCÉNARIOS VIABLES
           ════════════════════════════════════════════════════════════════════ */}
-      <Section
-        id="scenarios"
-        title="Scénarios Viables"
-        icon={TrendingUp}
-        color="green"
-        badge={`${scenarios.length} options`}
-      >
-        {scenarios.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <AlertTriangle className="w-12 h-12 mx-auto mb-3 text-orange-400" />
-            <p>Aucun scénario viable avec la configuration actuelle.</p>
-            <p className="text-sm mt-2">
-              Essayez de réduire vos objectifs ou d'augmenter votre capacité.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {scenarios.slice(0, 6).map((scenario, index) => (
-              <div
-                key={index}
-                onClick={() => handleSelectionScenario(scenario)}
-                className={`p-4 rounded-xl border-2 cursor-pointer transition-all hover:shadow-lg ${
-                  scenarioSelectionne === scenario
-                    ? "border-green-500 bg-green-50 ring-2 ring-green-200"
-                    : "border-gray-200 bg-white hover:border-green-300"
+      <Section id="scenarios" title="Scénarios Viables" icon={TrendingUp} color="green" badge={`${capacitePlanches} pl. en ${niveauConfig.label}`}>
+        <p className="text-sm text-gray-600 mb-4">
+          Cliquez sur un scénario pour pré-remplir automatiquement vos objectifs. Vous pouvez ensuite les ajuster manuellement.
+        </p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {scenarios.map(scenario => {
+            const isSelected = scenarioSelectionne === scenario.id;
+            const isRecommande = scenario.recommande;
+            
+            return (
+              <button
+                key={scenario.id}
+                onClick={() => selectionnerScenario(scenario)}
+                className={`p-4 rounded-xl border-2 text-left transition-all hover:shadow-lg ${
+                  isSelected 
+                    ? 'border-green-500 bg-green-50 ring-2 ring-green-200' 
+                    : scenario.viable 
+                      ? 'border-gray-200 bg-white hover:border-green-300' 
+                      : 'border-red-200 bg-red-50 opacity-60'
                 }`}
               >
-                <div className="flex justify-between items-start mb-3">
-                  <span className="px-2 py-1 bg-gray-100 rounded text-xs font-medium">
-                    Option {index + 1}
-                  </span>
-                  <span
-                    className={`px-2 py-1 rounded text-xs font-bold ${
-                      scenario.tauxRemplissage > 85
-                        ? "bg-orange-100 text-orange-700"
-                        : "bg-green-100 text-green-700"
-                    }`}
-                  >
-                    {scenario.tauxRemplissage.toFixed(0)}%
-                  </span>
+                {/* Header */}
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-lg font-bold">{scenario.nom}</span>
+                  {scenario.viable && (
+                    <CheckCircle className={`w-5 h-5 ${isSelected ? 'text-green-600' : 'text-green-400'}`} />
+                  )}
                 </div>
-
-                <div className="space-y-2 text-sm">
+                
+                {/* Description */}
+                <p className="text-xs text-gray-500 mb-3">{scenario.description}</p>
+                
+                {/* Détails */}
+                <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">🧺 AMAP</span>
-                    <span className="font-bold">{scenario.amap}</span>
+                    <span className="text-gray-600">AMAP :</span>
+                    <span className="font-medium">{scenario.marche.amap} paniers</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">🏪 Marché</span>
-                    <span className="font-bold">{scenario.marche}</span>
+                    <span className="text-gray-600">Marché :</span>
+                    <span className="font-medium">{scenario.marche.marche} unités</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">🍽️ Restaurant</span>
-                    <span className="font-bold">{scenario.restaurant}</span>
-                  </div>
-                  <div className="border-t pt-2 mt-2 flex justify-between">
-                    <span className="text-gray-600">💰 CA estimé</span>
-                    <span className="font-bold text-green-600">
-                      {scenario.caEstime?.toLocaleString() || "?"} €
+                    <span className="text-gray-600">Planches :</span>
+                    <span className={`font-bold ${scenario.viable ? 'text-green-600' : 'text-red-600'}`}>
+                      {scenario.planches} / {capacitePlanches}
                     </span>
                   </div>
+                  <div className="flex justify-between pt-2 border-t">
+                    <span className="text-gray-600">CA estimé :</span>
+                    <span className="font-bold text-blue-600">{scenario.caEstime?.toLocaleString('fr-FR')} €</span>
+                  </div>
                 </div>
 
-                {scenarioSelectionne === scenario && (
+                {/* Badge recommandé */}
+                {isRecommande && (
                   <div className="mt-3 text-center">
-                    <span className="text-xs text-green-600 font-medium">
-                      ✓ Sélectionné
+                    <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full">
+                      ⭐ Recommandé pour {niveauConfig.label}
                     </span>
                   </div>
                 )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {scenarioSelectionne && (
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200 flex items-center justify-between">
-            <span className="text-sm text-blue-800">
-              <Info className="w-4 h-4 inline mr-1" />
-              Scénario sélectionné chargé dans les curseurs ci-dessus
-            </span>
-            <button
-              onClick={handleAppliquerMarche}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
-            >
-              Appliquer ce scénario
-            </button>
-          </div>
-        )}
+              </button>
+            );
+          })}
+        </div>
       </Section>
 
       {/* ════════════════════════════════════════════════════════════════════
-          BLOC 4 : FOURNITURES ET INTRANTS
+          BLOC 4 : FOURNITURES & INTRANTS
           ════════════════════════════════════════════════════════════════════ */}
-      <Section
-        id="fournitures"
-        title="Fournitures et Intrants"
-        icon={Package}
-        color="orange"
-        badge={`${fournituresCalculees.totaux.total.toFixed(0)} €`}
+      <Section 
+        id="fournitures" 
+        title="Fournitures & Intrants" 
+        icon={Package} 
+        color="orange" 
+        badge={culturesSelectionnees.length > 0 ? `${fournituresCalculees.totaux.total.toFixed(0)} €` : 'Aucune culture'}
       >
         {culturesSelectionnees.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            <Sprout className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-            <p>Sélectionnez des cultures pour calculer les fournitures.</p>
-            <p className="text-sm mt-2">
-              Allez dans l'onglet "Cultures" pour commencer.
-            </p>
+            <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+            <p>Sélectionnez des cultures dans l'onglet "Cultures" pour voir les fournitures nécessaires.</p>
           </div>
         ) : (
           <>
-            {/* Résumé total */}
+            {/* Totaux par catégorie */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-              <div className="bg-green-50 rounded-lg p-3 border border-green-200 text-center">
-                <Sprout className="w-5 h-5 mx-auto text-green-600 mb-1" />
+              <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
+                <Sprout className="w-5 h-5 mx-auto mb-1 text-green-600" />
                 <div className="text-xs text-gray-600">Semences</div>
-                <div className="font-bold text-green-700">
-                  {fournituresCalculees.totaux.semences.toFixed(0)} €
-                </div>
+                <div className="text-lg font-bold text-green-700">{fournituresCalculees.totaux.semences.toFixed(0)} €</div>
               </div>
-              <div className="bg-amber-50 rounded-lg p-3 border border-amber-200 text-center">
-                <Leaf className="w-5 h-5 mx-auto text-amber-600 mb-1" />
+              <div className="bg-amber-50 rounded-lg p-3 text-center border border-amber-200">
+                <Leaf className="w-5 h-5 mx-auto mb-1 text-amber-600" />
                 <div className="text-xs text-gray-600">Fertilisation</div>
-                <div className="font-bold text-amber-700">
-                  {fournituresCalculees.totaux.fertilisation.toFixed(0)} €
-                </div>
+                <div className="text-lg font-bold text-amber-700">{fournituresCalculees.totaux.fertilisation.toFixed(0)} €</div>
               </div>
-              <div className="bg-blue-50 rounded-lg p-3 border border-blue-200 text-center">
-                <Shield className="w-5 h-5 mx-auto text-blue-600 mb-1" />
+              <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
+                <Shield className="w-5 h-5 mx-auto mb-1 text-blue-600" />
                 <div className="text-xs text-gray-600">Protection</div>
-                <div className="font-bold text-blue-700">
-                  {fournituresCalculees.totaux.protection.toFixed(0)} €
-                </div>
+                <div className="text-lg font-bold text-blue-700">{fournituresCalculees.totaux.protection.toFixed(0)} €</div>
               </div>
-              <div className="bg-purple-50 rounded-lg p-3 border border-purple-200 text-center">
-                <Bug className="w-5 h-5 mx-auto text-purple-600 mb-1" />
+              <div className="bg-purple-50 rounded-lg p-3 text-center border border-purple-200">
+                <Bug className="w-5 h-5 mx-auto mb-1 text-purple-600" />
                 <div className="text-xs text-gray-600">Bio-traitement</div>
-                <div className="font-bold text-purple-700">
-                  {fournituresCalculees.totaux.biotraitement.toFixed(0)} €
-                </div>
+                <div className="text-lg font-bold text-purple-700">{fournituresCalculees.totaux.biotraitement.toFixed(0)} €</div>
               </div>
-              <div className="bg-orange-100 rounded-lg p-3 border-2 border-orange-400 text-center">
-                <DollarSign className="w-5 h-5 mx-auto text-orange-600 mb-1" />
+              <div className="bg-orange-100 rounded-lg p-3 text-center border-2 border-orange-300">
+                <DollarSign className="w-5 h-5 mx-auto mb-1 text-orange-600" />
                 <div className="text-xs text-gray-600 font-medium">TOTAL</div>
-                <div className="font-bold text-xl text-orange-700">
-                  {fournituresCalculees.totaux.total.toFixed(0)} €
-                </div>
+                <div className="text-xl font-bold text-orange-700">{fournituresCalculees.totaux.total.toFixed(0)} €</div>
               </div>
             </div>
 
-            {/* Tableau détaillé par culture */}
+            {/* Détail par culture */}
+            <h4 className="font-semibold text-gray-700 mb-3">Détail par culture (cliquez sur une valeur pour l'ajuster)</h4>
             <div className="overflow-x-auto">
               <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="px-3 py-2 border text-left font-semibold">
-                      Culture
-                    </th>
-                    <th className="px-3 py-2 border text-center font-semibold">
-                      Planches
-                    </th>
-                    <th className="px-3 py-2 border text-right font-semibold text-green-700">
-                      Semences
-                    </th>
-                    <th className="px-3 py-2 border text-right font-semibold text-amber-700">
-                      Fertilisation
-                    </th>
-                    <th className="px-3 py-2 border text-right font-semibold text-blue-700">
-                      Protection
-                    </th>
-                    <th className="px-3 py-2 border text-right font-semibold text-purple-700">
-                      Bio-trait.
-                    </th>
-                    <th className="px-3 py-2 border text-right font-semibold text-orange-700">
-                      Total
-                    </th>
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-3 py-2 border text-left">Culture</th>
+                    <th className="px-3 py-2 border text-center">Pl.</th>
+                    <th className="px-3 py-2 border text-right">🌱 Semences</th>
+                    <th className="px-3 py-2 border text-right">🧪 Fertilisation</th>
+                    <th className="px-3 py-2 border text-right">🛡️ Protection</th>
+                    <th className="px-3 py-2 border text-right">🐛 Bio-trait.</th>
+                    <th className="px-3 py-2 border text-right font-bold">Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(fournituresCalculees.parCulture).map(
-                    ([id, data]) => {
-                      return (
-                        <tr key={id} className="hover:bg-gray-50">
-                          <td className="px-3 py-2 border font-medium">
-                            {data.nom}
-                          </td>
-                          <td className="px-3 py-2 border text-center">
-                            {data.planches}
-                          </td>
-                          <td
-                            className={`px-3 py-2 border text-right cursor-pointer hover:bg-green-50 ${
-                              data.ajuste.semences ? "bg-yellow-100" : ""
-                            }`}
-                            onClick={() => {
-                              const newVal = prompt(
-                                `Semences pour ${
-                                  data.nom
-                                } (actuel: ${data.semences.toFixed(0)}€):`,
-                                data.semences.toFixed(0)
-                              );
-                              if (newVal !== null)
-                                handleAjusterFourniture(
-                                  id,
-                                  "semences",
-                                  parseFloat(newVal) || 0
-                                );
-                            }}
-                            title="Cliquez pour modifier"
-                          >
-                            {data.semences.toFixed(0)} €
-                          </td>
-                          <td
-                            className={`px-3 py-2 border text-right cursor-pointer hover:bg-amber-50 ${
-                              data.ajuste.fertilisation ? "bg-yellow-100" : ""
-                            }`}
-                            onClick={() => {
-                              const newVal = prompt(
-                                `Fertilisation pour ${
-                                  data.nom
-                                } (actuel: ${data.fertilisation.toFixed(0)}€):`,
-                                data.fertilisation.toFixed(0)
-                              );
-                              if (newVal !== null)
-                                handleAjusterFourniture(
-                                  id,
-                                  "fertilisation",
-                                  parseFloat(newVal) || 0
-                                );
-                            }}
-                            title="Cliquez pour modifier"
-                          >
-                            {data.fertilisation.toFixed(0)} €
-                          </td>
-                          <td
-                            className={`px-3 py-2 border text-right cursor-pointer hover:bg-blue-50 ${
-                              data.ajuste.protection ? "bg-yellow-100" : ""
-                            }`}
-                            onClick={() => {
-                              const newVal = prompt(
-                                `Protection pour ${
-                                  data.nom
-                                } (actuel: ${data.protection.toFixed(0)}€):`,
-                                data.protection.toFixed(0)
-                              );
-                              if (newVal !== null)
-                                handleAjusterFourniture(
-                                  id,
-                                  "protection",
-                                  parseFloat(newVal) || 0
-                                );
-                            }}
-                            title="Cliquez pour modifier"
-                          >
-                            {data.protection.toFixed(0)} €
-                          </td>
-                          <td
-                            className={`px-3 py-2 border text-right cursor-pointer hover:bg-purple-50 ${
-                              data.ajuste.biotraitement ? "bg-yellow-100" : ""
-                            }`}
-                            onClick={() => {
-                              const newVal = prompt(
-                                `Bio-traitement pour ${
-                                  data.nom
-                                } (actuel: ${data.biotraitement.toFixed(0)}€):`,
-                                data.biotraitement.toFixed(0)
-                              );
-                              if (newVal !== null)
-                                handleAjusterFourniture(
-                                  id,
-                                  "biotraitement",
-                                  parseFloat(newVal) || 0
-                                );
-                            }}
-                            title="Cliquez pour modifier"
-                          >
-                            {data.biotraitement.toFixed(0)} €
-                          </td>
-                          <td className="px-3 py-2 border text-right font-bold text-orange-700">
-                            {data.total.toFixed(0)} €
-                          </td>
-                        </tr>
-                      );
-                    }
-                  )}
+                  {Object.entries(fournituresCalculees.parCulture).map(([id, data]) => {
+                    const ajust = ajustementsFournitures[id] || {};
+                    const hasAjustSemences = ajust.semences !== undefined;
+                    const hasAjustFertil = ajust.fertilisation !== undefined;
+                    const hasAjustProtec = ajust.protection !== undefined;
+                    const hasAjustBio = ajust.biotraitement !== undefined;
+
+                    return (
+                      <tr key={id} className="hover:bg-gray-50">
+                        <td className="px-3 py-2 border font-medium">{data.nom}</td>
+                        <td className="px-3 py-2 border text-center">{data.planches}</td>
+                        <td className="px-3 py-2 border text-right">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            value={data.semences.ajuste.toFixed(1)}
+                            onChange={(e) => ajusterFourniture(id, 'semences', e.target.value)}
+                            className={`w-20 px-1 py-0.5 text-right rounded border ${hasAjustSemences ? 'bg-yellow-50 border-yellow-300' : 'border-gray-200'}`}
+                          />
+                          {hasAjustSemences && (
+                            <button 
+                              onClick={() => reinitialiserAjustement(id, 'semences')}
+                              className="ml-1 text-xs text-gray-400 hover:text-red-500"
+                              title="Réinitialiser"
+                            >
+                              ↺
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 border text-right">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            value={data.fertilisation.ajuste.toFixed(1)}
+                            onChange={(e) => ajusterFourniture(id, 'fertilisation', e.target.value)}
+                            className={`w-20 px-1 py-0.5 text-right rounded border ${hasAjustFertil ? 'bg-yellow-50 border-yellow-300' : 'border-gray-200'}`}
+                          />
+                          {hasAjustFertil && (
+                            <button 
+                              onClick={() => reinitialiserAjustement(id, 'fertilisation')}
+                              className="ml-1 text-xs text-gray-400 hover:text-red-500"
+                              title="Réinitialiser"
+                            >
+                              ↺
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 border text-right">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            value={data.protection.ajuste.toFixed(1)}
+                            onChange={(e) => ajusterFourniture(id, 'protection', e.target.value)}
+                            className={`w-20 px-1 py-0.5 text-right rounded border ${hasAjustProtec ? 'bg-yellow-50 border-yellow-300' : 'border-gray-200'}`}
+                          />
+                          {hasAjustProtec && (
+                            <button 
+                              onClick={() => reinitialiserAjustement(id, 'protection')}
+                              className="ml-1 text-xs text-gray-400 hover:text-red-500"
+                              title="Réinitialiser"
+                            >
+                              ↺
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 border text-right">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            value={data.biotraitement.ajuste.toFixed(1)}
+                            onChange={(e) => ajusterFourniture(id, 'biotraitement', e.target.value)}
+                            className={`w-20 px-1 py-0.5 text-right rounded border ${hasAjustBio ? 'bg-yellow-50 border-yellow-300' : 'border-gray-200'}`}
+                          />
+                          {hasAjustBio && (
+                            <button 
+                              onClick={() => reinitialiserAjustement(id, 'biotraitement')}
+                              className="ml-1 text-xs text-gray-400 hover:text-red-500"
+                              title="Réinitialiser"
+                            >
+                              ↺
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 border text-right font-bold text-orange-700">
+                          {data.total.toFixed(0)} €
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
                 <tfoot className="bg-orange-100 font-bold">
                   <tr>
                     <td className="px-3 py-2 border">TOTAL</td>
                     <td className="px-3 py-2 border text-center">
-                      {culturesSelectionnees.reduce(
-                        (s, c) => s + (c.totalPlanches || 0),
-                        0
-                      )}
+                      {culturesSelectionnees.reduce((s, c) => s + (c.totalPlanches || 0), 0)}
                     </td>
-                    <td className="px-3 py-2 border text-right text-green-700">
-                      {fournituresCalculees.totaux.semences.toFixed(0)} €
-                    </td>
-                    <td className="px-3 py-2 border text-right text-amber-700">
-                      {fournituresCalculees.totaux.fertilisation.toFixed(0)} €
-                    </td>
-                    <td className="px-3 py-2 border text-right text-blue-700">
-                      {fournituresCalculees.totaux.protection.toFixed(0)} €
-                    </td>
-                    <td className="px-3 py-2 border text-right text-purple-700">
-                      {fournituresCalculees.totaux.biotraitement.toFixed(0)} €
-                    </td>
-                    <td className="px-3 py-2 border text-right text-orange-800 text-lg">
-                      {fournituresCalculees.totaux.total.toFixed(0)} €
-                    </td>
+                    <td className="px-3 py-2 border text-right text-green-700">{fournituresCalculees.totaux.semences.toFixed(0)} €</td>
+                    <td className="px-3 py-2 border text-right text-amber-700">{fournituresCalculees.totaux.fertilisation.toFixed(0)} €</td>
+                    <td className="px-3 py-2 border text-right text-blue-700">{fournituresCalculees.totaux.protection.toFixed(0)} €</td>
+                    <td className="px-3 py-2 border text-right text-purple-700">{fournituresCalculees.totaux.biotraitement.toFixed(0)} €</td>
+                    <td className="px-3 py-2 border text-right text-orange-800 text-lg">{fournituresCalculees.totaux.total.toFixed(0)} €</td>
                   </tr>
                 </tfoot>
               </table>
@@ -1177,10 +919,9 @@ const SimulateurScenarios = ({
             {/* Note explicative */}
             <div className="mt-4 p-3 bg-gray-50 rounded-lg text-xs text-gray-500">
               <Info className="w-4 h-4 inline mr-1" />
-              Les valeurs sont calculées automatiquement selon les chartes de
-              culture. Cliquez sur une valeur pour l'ajuster manuellement
-              (surlignée en jaune). Le total est répercuté dans l'onglet
-              Résultats.
+              Les valeurs sont calculées automatiquement selon les chartes de culture. 
+              Cliquez sur une valeur pour l'ajuster manuellement (surlignée en jaune).
+              Le total est répercuté dans l'onglet Résultats.
             </div>
           </>
         )}
