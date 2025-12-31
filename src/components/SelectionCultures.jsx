@@ -1,6 +1,7 @@
 // SelectionCultures.jsx V20 - AVEC INDICATEURS ÉCONOMIQUES PAR CULTURE
 // 🆕 V20 : Section "Indicateurs Économiques" ajoutée pour chaque culture
 // 🛠️ FIX : Calcul correct avec rotations, plafonnement à capacité, alertes visuelles
+// 📱 V22 : Optimisations mobile - bloc sélection replié par défaut
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { cultures } from '../data/cultures';
@@ -22,6 +23,26 @@ const SelectionCultures = ({
   const [modalRepartition, setModalRepartition] = useState({ open: false, cultureId: null });
   const [repartitionTemp, setRepartitionTemp] = useState({});
   const [accordeonsCultures, setAccordeonsCultures] = useState({});
+  
+  // 📱 Détection mobile
+  const [isMobile, setIsMobile] = useState(false);
+  
+  // 📱 État accordéon section principale (fermé par défaut sur mobile)
+  const [sectionSelectionOuverte, setSectionSelectionOuverte] = useState(true);
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 640;
+      setIsMobile(mobile);
+      // Fermer la section sur mobile au premier chargement
+      if (mobile) {
+        setSectionSelectionOuverte(false);
+      }
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // ═══════════════════════════════════════════════════════════════════════
   // RECALCUL AUTOMATIQUE QUAND NIVEAU OU LONGUEUR CHANGE
@@ -521,39 +542,52 @@ const SelectionCultures = ({
         )}
       </div>
 
-      {/* Sélection des cultures */}
-      <div className="bg-white rounded-lg shadow-md border border-gray-200 p-4">
-        <h3 className="font-bold text-lg mb-4 flex items-center">
-          <Plus className="w-5 h-5 mr-2 text-green-600" />
-          Ajouter des cultures
-        </h3>
+      {/* Sélection des cultures - 📱 Accordéon sur mobile */}
+      <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
+        {/* Header cliquable */}
+        <button 
+          onClick={() => setSectionSelectionOuverte(!sectionSelectionOuverte)}
+          className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
+        >
+          <h3 className="font-bold text-lg flex items-center">
+            <Plus className="w-5 h-5 mr-2 text-green-600" />
+            Ajouter des cultures
+            <span className="ml-2 text-sm font-normal text-gray-500">({cultures.length} disponibles)</span>
+          </h3>
+          <ChevronDown className={`w-6 h-6 text-gray-400 transition-transform ${sectionSelectionOuverte ? 'rotate-180' : ''}`} />
+        </button>
         
-        <div className="flex flex-wrap gap-2">
-          {cultures.map(culture => {
-            const dejaSelectionnee = culturesSelectionnees.find(c => c.id === culture.id);
-            const typeCycle = classifierCulture(culture);
-            
-            return (
-              <button
-                key={culture.id}
-                onClick={() => ajouterCulture(culture)}
-                disabled={dejaSelectionnee}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 ${
-                  dejaSelectionnee 
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                    : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
-                }`}
-              >
-                <span>{culture.nom}</span>
-                {!dejaSelectionnee && (
-                  <span className="text-xs opacity-60">
-                    {typeCycle === 'LONGUE_DUREE' ? '🏠' : typeCycle === 'ROTATION_RAPIDE' ? '⚡' : '🔄'}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        {/* Contenu - visible si ouvert */}
+        {sectionSelectionOuverte && (
+          <div className="p-4 border-t">
+            <div className="flex flex-wrap gap-2">
+              {cultures.map(culture => {
+                const dejaSelectionnee = culturesSelectionnees.find(c => c.id === culture.id);
+                const typeCycle = classifierCulture(culture);
+                
+                return (
+                  <button
+                    key={culture.id}
+                    onClick={() => ajouterCulture(culture)}
+                    disabled={dejaSelectionnee}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 ${
+                      dejaSelectionnee 
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                        : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
+                    }`}
+                  >
+                    <span>{culture.nom}</span>
+                    {!dejaSelectionnee && (
+                      <span className="text-xs opacity-60">
+                        {typeCycle === 'LONGUE_DUREE' ? '🏠' : typeCycle === 'ROTATION_RAPIDE' ? '⚡' : '🔄'}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Liste des cultures sélectionnées */}

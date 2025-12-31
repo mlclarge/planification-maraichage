@@ -1,9 +1,40 @@
-import React, { useState, useMemo } from 'react';
-import { ShoppingCart, Users, Store, AlertCircle, CheckCircle, Minus, Plus } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { ShoppingCart, Users, Store, AlertCircle, CheckCircle, Minus, Plus, ChevronDown } from 'lucide-react';
 import { calculerBesoinHebdo } from '../data/compositionsPaniers';
 
 const ConfigurationMarche = ({ marche, setMarche, marcheValide, setMarcheValide }) => {
   const [afficherTableau, setAfficherTableau] = useState(false);
+  
+  // 📱 Détection mobile et accordéons repliés par défaut
+  const [isMobile, setIsMobile] = useState(false);
+  const [accordeons, setAccordeons] = useState({
+    amap: true,
+    marche: true,
+    resume: true,
+    production: true
+  });
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 640;
+      setIsMobile(mobile);
+      if (mobile) {
+        setAccordeons({
+          amap: false,
+          marche: false,
+          resume: false,
+          production: false
+        });
+      }
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+  
+  const toggleAccordeon = (id) => {
+    setAccordeons(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const handleChange = (field, value) => {
     setMarche(prev => ({ ...prev, [field]: parseFloat(value) || 0 }));
@@ -190,14 +221,21 @@ const ConfigurationMarche = ({ marche, setMarche, marcheValide, setMarcheValide 
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* AMAP */}
-          <div className="bg-green-50 rounded-lg p-5 border border-green-200">
-            <div className="flex items-center space-x-2 mb-4">
-              <Users className="w-5 h-5 text-green-600" />
-              <h3 className="font-semibold text-lg text-gray-800">AMAP</h3>
-            </div>
+          {/* AMAP - 📱 Accordéon sur mobile */}
+          <div className="bg-green-50 rounded-lg border border-green-200 overflow-hidden">
+            <button 
+              onClick={() => toggleAccordeon('amap')}
+              className="w-full p-5 flex items-center justify-between hover:bg-green-100/50 transition-colors text-left"
+            >
+              <div className="flex items-center space-x-2">
+                <Users className="w-5 h-5 text-green-600" />
+                <h3 className="font-semibold text-lg text-gray-800">AMAP</h3>
+                <span className="text-sm text-green-600 font-bold">({marche.amap})</span>
+              </div>
+              <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform sm:hidden ${accordeons.amap ? 'rotate-180' : ''}`} />
+            </button>
             
-            <div className="space-y-4">
+            <div className={`${accordeons.amap ? 'block' : 'hidden sm:block'} px-5 pb-5 space-y-4`}>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Nombre de paniers hebdomadaires
@@ -298,16 +336,21 @@ const ConfigurationMarche = ({ marche, setMarche, marcheValide, setMarcheValide 
             </div>
           </div>
 
-          {/* Marché de plein vent */}
-          <div className="bg-blue-50 rounded-lg p-5 border border-blue-200">
-            <div className="flex items-center space-x-2 mb-4">
-              <Store className="w-5 h-5 text-blue-600" />
-              <h3 className="font-semibold text-lg text-gray-800">
-                Marché de Plein Vent
-              </h3>
-            </div>
+          {/* Marché de plein vent - 📱 Accordéon sur mobile */}
+          <div className="bg-blue-50 rounded-lg border border-blue-200 overflow-hidden">
+            <button 
+              onClick={() => toggleAccordeon('marche')}
+              className="w-full p-5 flex items-center justify-between hover:bg-blue-100/50 transition-colors text-left"
+            >
+              <div className="flex items-center space-x-2">
+                <Store className="w-5 h-5 text-blue-600" />
+                <h3 className="font-semibold text-lg text-gray-800">Marché de Plein Vent</h3>
+                <span className="text-sm text-blue-600 font-bold">({marche.marche + marche.restaurant})</span>
+              </div>
+              <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform sm:hidden ${accordeons.marche ? 'rotate-180' : ''}`} />
+            </button>
             
-            <div className="space-y-4">
+            <div className={`${accordeons.marche ? 'block' : 'hidden sm:block'} px-5 pb-5 space-y-4`}>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Nombre de clients hebdomadaires estimés
@@ -372,9 +415,17 @@ const ConfigurationMarche = ({ marche, setMarche, marcheValide, setMarcheValide 
           </div>
         </div>
 
-        {/* Résumé global avec 3 CA */}
-        <div className="mt-6 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg p-6 border border-gray-300">
-          <h3 className="font-bold text-lg text-gray-900 mb-4">📊 Résumé de la Demande</h3>
+        {/* Résumé global avec 3 CA - 📱 Accordéon sur mobile */}
+        <div className="mt-6 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-gray-300 overflow-hidden">
+          <button 
+            onClick={() => toggleAccordeon('resume')}
+            className="w-full p-4 flex items-center justify-between hover:bg-white/50 transition-colors text-left"
+          >
+            <h3 className="font-bold text-lg text-gray-900">📊 Résumé de la Demande</h3>
+            <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform sm:hidden ${accordeons.resume ? 'rotate-180' : ''}`} />
+          </button>
+          
+          <div className={`${accordeons.resume ? 'block' : 'hidden sm:block'} p-6 pt-0`}>
           <div className="grid grid-cols-2 md:grid-cols-7 gap-4">
             <div className="bg-white rounded-lg p-4 border border-gray-200">
               <p className="text-xs text-gray-600 mb-1">Total Paniers/Clients</p>
@@ -413,16 +464,24 @@ const ConfigurationMarche = ({ marche, setMarche, marcheValide, setMarcheValide 
               <p className="text-xs text-green-100">Primeur/Resto</p>
             </div>
           </div>
+          </div>
         </div>
       </div>
 
-      {/* 🥕 Production Hebdomadaire par Légume */}
-      <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-        <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center">
-          <span className="text-2xl mr-2">🥕</span>
-          Production Hebdomadaire par Légume (unités réelles)
-        </h3>
+      {/* 🥕 Production Hebdomadaire par Légume - 📱 Accordéon sur mobile */}
+      <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
+        <button 
+          onClick={() => toggleAccordeon('production')}
+          className="w-full p-6 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
+        >
+          <h3 className="text-xl font-bold text-gray-900 flex items-center">
+            <span className="text-2xl mr-2">🥕</span>
+            Production Hebdomadaire par Légume
+          </h3>
+          <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform sm:hidden ${accordeons.production ? 'rotate-180' : ''}`} />
+        </button>
         
+        <div className={`${accordeons.production ? 'block' : 'hidden sm:block'} px-6 pb-6`}>
         <p className="text-sm text-gray-600 mb-6">
           Quantités moyennes hebdomadaires calculées sur la période de récolte de chaque légume.
         </p>
@@ -950,6 +1009,7 @@ const ConfigurationMarche = ({ marche, setMarche, marcheValide, setMarcheValide 
             </table>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
