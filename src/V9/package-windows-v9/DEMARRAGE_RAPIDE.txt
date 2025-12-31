@@ -1,0 +1,98 @@
+═══════════════════════════════════════════════════════════
+  INSTALLATION ULTRA-RAPIDE - V9.0
+  Encodage UTF-8 Corrigé + Calcul Planches Automatique
+═══════════════════════════════════════════════════════════
+
+📦 MÉTHODE AUTOMATIQUE (Recommandée)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Extraire package-windows-v9.zip dans votre projet
+
+2. Ouvrir PowerShell dans le dossier package-windows-v9
+
+3. Taper ces 3 commandes :
+
+   Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+   .\install.ps1
+   cd ..
+
+4. Lancer l'application :
+
+   npm run dev
+
+5. Ouvrir : http://localhost:5173
+
+✅ TERMINÉ !
+
+═══════════════════════════════════════════════════════════
+
+🔧 MÉTHODE MANUELLE (Alternative)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Dans PowerShell, taper :
+
+mkdir src\utils
+copy package-windows-v9\calculPlanchesSimultanees.js src\utils\
+copy src\components\SelectionCultures.jsx src\components\SelectionCultures.jsx.backup
+copy package-windows-v9\SelectionCultures.jsx src\components\
+npm run dev
+
+✅ TERMINÉ !
+
+═══════════════════════════════════════════════════════════
+
+✅ VÉRIFICATIONS RAPIDES
+━━━━━━━━━━━━━━━━━━━━━
+
+1. Interface affiche "Marché" (PAS "MarchÃ©")
+2. Ajouter culture "Courgettes"
+3. Voir section "📊 Planification Professionnelle"
+4. Voir "⭐ Planches simultanées: 5"
+5. Voir "📅 Planning de Semis Échelonnés"
+6. Voir "🌱 Besoins en Intrants"
+
+Si tout est OK → Installation réussie ! 🎉
+
+═══════════════════════════════════════════════════════════
+
+🐛 PROBLÈMES ?
+━━━━━━━━━━━━━━
+
+Encodage incorrect       → Voir VERIFICATION.md Test 1
+Module introuvable       → Voir VERIFICATION.md Problème 2
+Planches = 0            → Voir VERIFICATION.md Problème 3
+Erreur dans console F12 → Voir VERIFICATION.md Problème 4
+
+Documentation complète : INSTALLATION_WINDOWS.md
+
+═══════════════════════════════════════════════════════════
+
+📂 FICHIERS DU PACKAGE
+━━━━━━━━━━━━━━━━━━━━
+
+README.md                      → Vue d'ensemble
+INSTALLATION_WINDOWS.md        → Guide détaillé
+VERIFICATION.md                → Tests après installation
+DEMARRAGE_RAPIDE.txt          → Ce fichier
+calculPlanchesSimultanees.js  → Module de calcul
+SelectionCultures.jsx         → Composant V9 (UTF-8 corrigé)
+install.ps1                   → Script d'installation automatique
+
+═══════════════════════════════════════════════════════════
+
+🎯 CE QUI CHANGE
+━━━━━━━━━━━━━━━
+
+AVANT                           APRÈS V9.0
+─────────────────────────────────────────────────────────
+❌ "MarchÃ©"                   ✅ "Marché"
+❌ Calcul basique              ✅ Calcul intelligent
+❌ Pas de séries auto          ✅ 4 séries générées
+❌ Pas d'intrants              ✅ Calcul plants/graines/coûts
+❌ Pas de validation           ✅ Alertes automatiques
+
+═══════════════════════════════════════════════════════════
+
+🚀 PRÊT ? LANCEZ install.ps1 !
+
+═══════════════════════════════════════════════════════════

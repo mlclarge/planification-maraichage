@@ -1,0 +1,17 @@
+Je souhaiterais updater la méthode de calcul du nombre de planches pour produire les kgs, bottes, unités de chaque légumes. Cette méthode de calcul est basée sur ce document [Modélisation calcul planification template] que tu trouves en pj. Le fichier  pour ce calcul est semble t-il [calculPlanchesSimultanees.js] en pj.
+L' objectif de cet update est d'optimiser l'occupation de chacune des planches de chaque jardin afin, d'avoir le minimum de temps de non culture. Le problème actuel, c'est qu'il y a beaucoup trop de planches en production.
+
+Des contraintes cependant sont présentes :
+- la nécessite de produire les volumes de légumes (bottes, kgs, unités) pour chaque semaine de la saison de vente : du 1er mai au 1er septembre. Donc Saison de ventes : du 1er mai au 1er septembre, soit 20 semaines, mais saison de production peut démarrer avant selon le contexte pédo climatique.
+- le respect des temps intercalaires entre chaque culture : 1, 2 ou 3 semaines.
+- la surface a cultiver est donc sous forme de planches de 15m ou 30m de 0.75m de large : 8 planches de 30 M et 0.75 m de large sous serre et 5 jardins de 12 planches de 15 m sur 0.75 m de large.
+- [Charte des pepinieres , des semis, des taches ] : voir en pj
+- [Matrice de Planification des Fenêtres S/R pour 11 Cultures Clés] : Une planche possède des fenetres de récolte, un étalement de la production sur son cycle végétatif. il est faut donc : produire correctement, pour éviter un sous production ou une sur production.
+
+Les particularités des cultures :
+- Un légume peut etre sur plusieurs planches, dans plusieurs jardins d'une manière simultanée ou décalée dans le temps.
+- Certaines sont à cycle court, moyen ou long : sur quelques semaines, d'autres sur plusieurs mois.
+- Certaines cultures courtes peuvent profiter d'un temps de croissance long de certains légumes , pour etre sur la même planche.
+Exemple du radis qui peut etre semés avec d'autres légumes pendant la phase de croissance d'un légume à cycle long.
+
+Avant de démarrer, fait un bilan de l'existant, et propose moi une méthode de calcul qui va prendre en compte les contraintes et les particularités de chaque légume. As tu besoin d'autres éléments ?

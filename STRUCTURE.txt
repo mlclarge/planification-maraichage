@@ -1,0 +1,39 @@
+STRUCTURE DU PROJET
+===================
+
+app-v8-final/
+│
+├── 📄 Configuration (Racine)
+│   ├── package.json              → Configuration npm/dépendances
+│   ├── vite.config.js           → Configuration Vite (serveur dev)
+│   ├── tailwind.config.js       → Configuration Tailwind CSS
+│   ├── postcss.config.js        → Configuration PostCSS
+│   └── index.html               → Page HTML racine
+│
+└── 📁 src/                       → CODE SOURCE PRINCIPAL
+    │
+    ├── 📄 Fichiers racine
+    │   ├── main.jsx             → Point d'entrée React
+    │   ├── App.jsx              → Composant racine (navigation)
+    │   └── index.css            → Styles globaux Tailwind
+    │
+    ├── 📁 components/            → COMPOSANTS INTERFACE
+    │   ├── ConfigurationMarche.jsx     → Onglet 1: Config AMAP/marché
+    │   ├── ConfigurationJardins.jsx    → Onglet 2: Config jardins
+    │   ├── SelectionCultures.jsx  ✅   → Onglet 3: Sélection cultures (V8)
+    │   ├── Planification.jsx      ✅   → Onglet 4: Gantt (V8)
+    │   ├── GanttChart.jsx         ✅   → Diagramme de Gantt complet (V8)
+    │   └── Resultats.jsx          ✅   → Onglet 5: Résultats financiers (V8)
+    │
+    ├── 📁 data/                  → DONNÉES DE BASE
+    │   ├── cultures.js               → 10 cultures avec rendements/prix
+    │   ├── compositionsPaniers.js ✅  → Compositions paniers + SAISON (V8)
+    │   └── taches.js                 → Tâches par culture
+    │
+    └── 📁 utils/                 → MOTEUR DE PLANIFICATION ⭐
+        ├── constantes.js         ✅   → SAISON, zones climatiques (V8)
+        ├── PlanningEngine.js     ✅   → Calcul rétro-planning (V8)
+        └── PlancheTimeline.js    ✅   → Gestion Tetris Temporel (V8)
+
+TOTAL: 20 fichiers
+✅ = Nouveau ou modifié en V8.0

@@ -1,0 +1,454 @@
+// calculScenarios_v21.js - Moteur de Simulation "Capacity First"
+// 🎯 Part des contraintes (planches disponibles) pour proposer des scénarios viables
+// 🆕 V21 : Tous les exports nommés pour compatibilité
+
+import { SAISON } from './constantes';
+import { compositionsPaniers, getSaison } from '../data/compositionsPaniers';
+import { cultures } from '../data/cultures';
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CONFIGURATION
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+// Coefficients de maturité
+export const COEFFICIENTS_MATURITE = {
+  debutant: 0.70,
+  junior: 0.85,
+  expert: 1.00
+};
+
+// Types de cycles pour le calcul des rotations
+export const TYPES_CYCLES = {
+  LONGUE_DUREE: { rotations: 1, cultures: ['tomate', 'aubergine', 'concombre'] },
+  ROTATION_MOYENNE: { rotations: 2, cultures: ['courgette', 'haricot', 'carotte', 'betterave', 'basilic'] },
+  ROTATION_RAPIDE: { rotations: 4, cultures: ['radis', 'mesclun', 'verdurette'] }
+};
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CALCUL DES BESOINS PAR CULTURE
+ * Calcule le besoin total sur la saison pour chaque légume
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function calculerBesoinsSaison(marche) {
+  const besoins = {};
+  
+  // Initialiser tous les légumes à 0
+  Object.keys(compositionsPaniers.printemps).forEach(legume => {
+    besoins[legume] = 0;
+  });
+  
+  // Calculer sur toutes les semaines de saison (18-38)
+  for (let semaine = SAISON.debut; semaine <= SAISON.fin; semaine++) {
+    const saison = getSaison(semaine);
+    const compositions = compositionsPaniers[saison];
+    
+    Object.keys(compositions).forEach(legume => {
+      const poids = compositions[legume];
+      
+      // AMAP (répartition par taille de panier)
+      const nbPetit = Math.round(marche.amap * marche.tauxPetit);
+      const nbMoyen = Math.round(marche.amap * marche.tauxMoyen);
+      const nbGrand = Math.round(marche.amap * marche.tauxGrand);
+      
+      const besoinAMAP = (nbPetit * poids.petit + nbMoyen * poids.moyen + nbGrand * poids.grand) / 1000;
+      
+      // Marché (moyenne des 3 tailles)
+      const poidsMoyen = (poids.petit + poids.moyen + poids.grand) / 3;
+      const besoinMarche = marche.marche * (poidsMoyen / 1000);
+      
+      // Restaurant (grand panier)
+      const besoinRestaurant = marche.restaurant * (poids.grand / 1000);
+      
+      besoins[legume] += besoinAMAP + besoinMarche + besoinRestaurant;
+    });
+  }
+  
+  return besoins;
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CALCUL DES PLANCHES NÉCESSAIRES PAR CULTURE
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function calculerPlanchesParCulture(besoins, options = {}) {
+  const {
+    niveauMaturite = 'debutant',
+    longueurPlanche = 15,
+    modeIntercalage = true
+  } = options;
+  
+  const coefficient = COEFFICIENTS_MATURITE[niveauMaturite] || 0.70;
+  const resultats = {};
+  let planchesTotales = 0;
+  
+  // Trouver les données de culture pour chaque légume
+  cultures.forEach(culture => {
+    const besoin = besoins[culture.id] || 0;
+    if (besoin <= 0) {
+      resultats[culture.id] = { planches: 0, besoin: 0, rendement: 0, rotations: 1 };
+      return;
+    }
+    
+    // Rendement selon longueur de planche
+    const rendementBase = longueurPlanche === 30 
+      ? culture.rendement.planche30m 
+      : (culture.rendement.planche15m || culture.rendement.planche30m / 2);
+    
+    // Appliquer coefficient de maturité
+    const rendementEffectif = rendementBase * coefficient;
+    
+    // Déterminer le nombre de rotations possibles
+    let rotations = 1;
+    for (const [type, config] of Object.entries(TYPES_CYCLES)) {
+      if (config.cultures.includes(culture.id)) {
+        rotations = config.rotations;
+        break;
+      }
+    }
+    
+    // Production par planche sur la saison
+    const productionParPlanche = rendementEffectif * rotations;
+    
+    // Planches nécessaires
+    const planches = Math.ceil(besoin / productionParPlanche);
+    
+    resultats[culture.id] = {
+      planches,
+      besoin: Math.round(besoin * 10) / 10,
+      rendement: Math.round(rendementEffectif * 10) / 10,
+      rotations,
+      productionParPlanche: Math.round(productionParPlanche * 10) / 10,
+      type: rotations >= 3 ? 'rapide' : rotations >= 2 ? 'moyenne' : 'longue'
+    };
+    
+    planchesTotales += planches;
+  });
+  
+  // Appliquer l'intercalage si activé
+  if (modeIntercalage) {
+    const economie = calculerEconomieIntercalage(resultats);
+    planchesTotales -= economie.planchesEconomisees;
+    resultats._intercalage = economie;
+  }
+  
+  resultats._total = planchesTotales;
+  
+  return resultats;
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CALCUL DE L'ÉCONOMIE PAR INTERCALAGE
+ * Les cultures rapides peuvent s'insérer avant/après les cultures longues
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function calculerEconomieIntercalage(resultatsParCulture) {
+  // Planches de cultures longues disponibles pour intercalage
+  const planchesHotes = 
+    (resultatsParCulture.tomate?.planches || 0) +
+    (resultatsParCulture.aubergine?.planches || 0) +
+    (resultatsParCulture.concombre?.planches || 0);
+  
+  // Fenêtres disponibles : ~8 semaines avant + ~4 semaines après = ~12 semaines
+  // Un radis = 4 semaines, donc 3 cycles possibles par planche hôte
+  const cyclesIntercalairesDisponibles = planchesHotes * 2; // 2 cycles (avant + après)
+  
+  // Cultures intercalaires
+  const radis = resultatsParCulture.radis?.planches || 0;
+  const mesclun = resultatsParCulture.mesclun?.planches || 0;
+  const verdurette = resultatsParCulture.verdurette?.planches || 0;
+  
+  // Économie : on peut absorber une partie des cultures rapides dans les fenêtres
+  const economieRadis = Math.min(radis, Math.floor(cyclesIntercalairesDisponibles * 0.4));
+  const economieMesclun = Math.min(mesclun, Math.floor(cyclesIntercalairesDisponibles * 0.3));
+  const economieVerdurette = Math.min(verdurette, Math.floor(cyclesIntercalairesDisponibles * 0.2));
+  
+  const planchesEconomisees = economieRadis + economieMesclun + economieVerdurette;
+  
+  return {
+    planchesHotes,
+    cyclesDisponibles: cyclesIntercalairesDisponibles,
+    economieRadis,
+    economieMesclun,
+    economieVerdurette,
+    planchesEconomisees,
+    details: [
+      economieRadis > 0 ? `Radis: -${economieRadis} pl.` : null,
+      economieMesclun > 0 ? `Mesclun: -${economieMesclun} pl.` : null,
+      economieVerdurette > 0 ? `Verdurettes: -${economieVerdurette} pl.` : null
+    ].filter(Boolean)
+  };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * TROUVER LE COEFFICIENT DE RÉDUCTION POUR ÊTRE VIABLE
+ * Calcule quel % de la demande on peut satisfaire avec les planches disponibles
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function trouverCoefficientViable(marche, capacitePlanches, options = {}) {
+  const { niveauMaturite = 'debutant', marge = 0.95 } = options;
+  
+  // Calculer les besoins à 100%
+  const besoins100 = calculerBesoinsSaison(marche);
+  const planches100 = calculerPlanchesParCulture(besoins100, { niveauMaturite });
+  
+  if (planches100._total <= capacitePlanches) {
+    return { coefficient: 1.0, planchesNecessaires: planches100._total, viable: true };
+  }
+  
+  // Chercher le coefficient par dichotomie
+  let coeffMin = 0.3;
+  let coeffMax = 1.0;
+  let coefficient = 0.5;
+  
+  for (let i = 0; i < 10; i++) {
+    coefficient = (coeffMin + coeffMax) / 2;
+    
+    const marcheReduit = {
+      ...marche,
+      amap: Math.round(marche.amap * coefficient),
+      marche: Math.round(marche.marche * coefficient),
+      restaurant: Math.round(marche.restaurant * coefficient)
+    };
+    
+    const besoins = calculerBesoinsSaison(marcheReduit);
+    const planches = calculerPlanchesParCulture(besoins, { niveauMaturite });
+    
+    if (planches._total <= capacitePlanches * marge) {
+      coeffMin = coefficient;
+    } else {
+      coeffMax = coefficient;
+    }
+  }
+  
+  return { 
+    coefficient: Math.round(coeffMin * 100) / 100, 
+    planchesNecessaires: Math.round(capacitePlanches * marge),
+    viable: false 
+  };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * GÉNÉRER DES SCÉNARIOS VIABLES AUTOMATIQUEMENT
+ * 🆕 V21 FIX : Part de la CAPACITÉ pour créer de vraies nuances
+ * Au lieu de réduire la demande, calcule quelle demande correspond à X% de capacité
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function genererScenariosViables(marche, capacitePlanches, options = {}) {
+  const { niveauMaturite = 'debutant' } = options;
+  const scenarios = [];
+  
+  // Calculer d'abord les besoins de la demande actuelle pour avoir un ratio
+  const besoinsActuels = calculerBesoinsSaison(marche);
+  const planchesActuelles = calculerPlanchesParCulture(besoinsActuels, { niveauMaturite });
+  const planchesDemandeActuelle = planchesActuelles._total;
+  
+  // Ratio : combien de planches par unité de marché
+  const totalUnites = (marche.amap || 0) + (marche.marche || 0) + (marche.restaurant || 0);
+  const planchesParUnite = totalUnites > 0 ? planchesDemandeActuelle / totalUnites : 1;
+  
+  // Fonction helper : calculer le marché pour un nombre de planches cible
+  const calculerMarchePourCapacite = (planchesCibles) => {
+    if (totalUnites === 0 || planchesDemandeActuelle === 0) {
+      return { ...marche };
+    }
+    
+    // Ratio de réduction basé sur la capacité cible
+    const ratio = planchesCibles / planchesDemandeActuelle;
+    
+    return {
+      amap: Math.round((marche.amap || 0) * ratio),
+      marche: Math.round((marche.marche || 0) * ratio),
+      restaurant: Math.round((marche.restaurant || 0) * ratio),
+      tauxPetit: marche.tauxPetit,
+      tauxMoyen: marche.tauxMoyen,
+      tauxGrand: marche.tauxGrand
+    };
+  };
+  
+  // Scénario 1 : PRUDENT (80% de la capacité)
+  const planchesPrudent = Math.floor(capacitePlanches * 0.80);
+  const marchePrudent = calculerMarchePourCapacite(planchesPrudent);
+  const besoinsPrudentCalc = calculerBesoinsSaison(marchePrudent);
+  const planchesPrudentCalc = calculerPlanchesParCulture(besoinsPrudentCalc, { niveauMaturite });
+  
+  scenarios.push({
+    id: 'prudent',
+    nom: '🛡️ Prudent',
+    description: 'Marge de sécurité de 20% pour les imprévus',
+    marche: marchePrudent,
+    planches: planchesPrudentCalc._total,
+    planchesCibles: planchesPrudent,
+    tauxRemplissage: Math.round((planchesPrudentCalc._total / capacitePlanches) * 100),
+    caEstime: estimerCA(marchePrudent),
+    viable: true,
+    recommande: niveauMaturite === 'debutant'
+  });
+  
+  // Scénario 2 : ÉQUILIBRÉ (90% de la capacité)
+  const planchesEquilibre = Math.floor(capacitePlanches * 0.90);
+  const marcheEquilibre = calculerMarchePourCapacite(planchesEquilibre);
+  const besoinsEquilibreCalc = calculerBesoinsSaison(marcheEquilibre);
+  const planchesEquilibreCalc = calculerPlanchesParCulture(besoinsEquilibreCalc, { niveauMaturite });
+  
+  scenarios.push({
+    id: 'equilibre',
+    nom: '⚖️ Équilibré',
+    description: 'Bonne utilisation avec marge de 10%',
+    marche: marcheEquilibre,
+    planches: planchesEquilibreCalc._total,
+    planchesCibles: planchesEquilibre,
+    tauxRemplissage: Math.round((planchesEquilibreCalc._total / capacitePlanches) * 100),
+    caEstime: estimerCA(marcheEquilibre),
+    viable: true,
+    recommande: niveauMaturite === 'junior'
+  });
+  
+  // Scénario 3 : AMBITIEUX (100% de la capacité)
+  const planchesAmbitieux = capacitePlanches;
+  const marcheAmbitieux = calculerMarchePourCapacite(planchesAmbitieux);
+  const besoinsAmbitieuxCalc = calculerBesoinsSaison(marcheAmbitieux);
+  const planchesAmbitieuxCalc = calculerPlanchesParCulture(besoinsAmbitieuxCalc, { niveauMaturite });
+  
+  scenarios.push({
+    id: 'ambitieux',
+    nom: '🚀 Ambitieux',
+    description: 'Capacité maximale, aucune marge',
+    marche: marcheAmbitieux,
+    planches: planchesAmbitieuxCalc._total,
+    planchesCibles: planchesAmbitieux,
+    tauxRemplissage: Math.round((planchesAmbitieuxCalc._total / capacitePlanches) * 100),
+    caEstime: estimerCA(marcheAmbitieux),
+    viable: planchesAmbitieuxCalc._total <= capacitePlanches,
+    recommande: niveauMaturite === 'expert'
+  });
+  
+  // Scénario 4 : DEMANDE ACTUELLE (pour comparaison)
+  scenarios.push({
+    id: 'actuel',
+    nom: '📊 Demande Actuelle',
+    description: 'Votre configuration marché actuelle',
+    marche: { ...marche },
+    planches: planchesActuelles._total,
+    tauxRemplissage: Math.round((planchesActuelles._total / capacitePlanches) * 100),
+    caEstime: estimerCA(marche),
+    viable: planchesActuelles._total <= capacitePlanches,
+    recommande: false,
+    estActuel: true
+  });
+  
+  return scenarios;
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ESTIMER LE CHIFFRE D'AFFAIRES
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function estimerCA(marche) {
+  // Prix moyens des paniers
+  const prixPetit = 15;
+  const prixMoyen = 25;
+  const prixGrand = 35;
+  
+  // CA hebdomadaire AMAP
+  const caHebdoAMAP = 
+    Math.round(marche.amap * marche.tauxPetit) * prixPetit +
+    Math.round(marche.amap * marche.tauxMoyen) * prixMoyen +
+    Math.round(marche.amap * marche.tauxGrand) * prixGrand;
+  
+  // CA hebdomadaire marché (prix moyen)
+  const caHebdoMarche = marche.marche * prixMoyen;
+  
+  // CA hebdomadaire restaurant (prix grand)
+  const caHebdoRestaurant = marche.restaurant * prixGrand;
+  
+  // Total sur 21 semaines de saison
+  const nbSemaines = SAISON.fin - SAISON.debut + 1;
+  return (caHebdoAMAP + caHebdoMarche + caHebdoRestaurant) * nbSemaines;
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CALCULER L'IMPACT D'UNE MODIFICATION DU MARCHÉ
+ * Utilisé pour le feedback temps réel des curseurs
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function calculerImpact(marcheModifie, capacitePlanches, options = {}) {
+  const { niveauMaturite = 'debutant' } = options;
+  
+  const besoins = calculerBesoinsSaison(marcheModifie);
+  const detailPlanches = calculerPlanchesParCulture(besoins, { niveauMaturite });
+  const planchesNecessaires = detailPlanches._total;
+  
+  const ecart = planchesNecessaires - capacitePlanches;
+  const tauxRemplissage = (planchesNecessaires / capacitePlanches) * 100;
+  const viable = planchesNecessaires <= capacitePlanches;
+  
+  // Générer des conseils contextuels
+  const conseils = [];
+  
+  if (!viable) {
+    conseils.push({
+      type: 'error',
+      message: `Il manque ${ecart} planches. Réduisez vos objectifs ou passez au niveau supérieur.`
+    });
+    
+    // Trouver quelle réduction permettrait d'être viable
+    const coeff = trouverCoefficientViable(marcheModifie, capacitePlanches, { niveauMaturite });
+    conseils.push({
+      type: 'suggestion',
+      message: `En passant à ${Math.round(coeff.coefficient * 100)}% de cette demande, vous seriez viable.`
+    });
+  } else if (tauxRemplissage >= 95) {
+    conseils.push({
+      type: 'warning',
+      message: 'Attention, vous êtes à la limite de votre capacité. Peu de marge pour les imprévus.'
+    });
+  } else if (tauxRemplissage >= 80) {
+    conseils.push({
+      type: 'success',
+      message: 'Bonne utilisation de vos planches avec une marge de sécurité raisonnable.'
+    });
+  } else {
+    conseils.push({
+      type: 'info',
+      message: `Vous pourriez augmenter votre production de ${Math.round(100 - tauxRemplissage)}%.`
+    });
+  }
+  
+  return {
+    planchesNecessaires,
+    capacitePlanches,
+    ecart,
+    tauxRemplissage: Math.round(tauxRemplissage),
+    viable,
+    caEstime: estimerCA(marcheModifie),
+    detailPlanches,
+    conseils,
+    intercalage: detailPlanches._intercalage
+  };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * EXPORTS - TOUS NOMMÉS POUR COMPATIBILITÉ V21
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export default {
+  calculerBesoinsSaison,
+  calculerPlanchesParCulture,
+  calculerEconomieIntercalage,
+  trouverCoefficientViable,
+  genererScenariosViables,
+  estimerCA,
+  calculerImpact,
+  COEFFICIENTS_MATURITE,
+  TYPES_CYCLES
+};
