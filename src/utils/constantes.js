@@ -1,5 +1,5 @@
-// constantes.js V13 - Configuration centralisée
-// 🆕 Niveaux de maturité, saison, types de cycles
+// constantes.js V14 - Configuration centralisée
+// 🆕 V14 : Saison corrigée à 20 semaines (S18→S37)
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -61,8 +61,8 @@ export const NIVEAU_MATURITE_DEFAUT = 'debutant';
  */
 export const SAISON = {
   debut: 18,        // Semaine 18 = début mai
-  fin: 38,          // Semaine 38 = mi-septembre
-  duree: 21,        // 21 semaines de vente
+  fin: 37,          // 🆕 V14 : Semaine 37 = mi-septembre (était 38)
+  duree: 20,        // 🆕 V14 : 20 semaines de vente (était 21)
   mois: 'Mai-Septembre',
   
   // Extensions possibles
@@ -76,7 +76,7 @@ export const SAISON = {
     26: 'Juillet (S26)',
     31: 'Août (S31)',
     35: 'Sept (S35)',
-    38: 'Mi-Sept (S38)'
+    37: 'Mi-Sept (S37)' // 🆕 V14 : était 38
   }
 };
 

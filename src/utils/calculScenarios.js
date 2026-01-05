@@ -1,10 +1,28 @@
-// calculScenarios_v21.js - Moteur de Simulation "Capacity First"
+// calculScenarios_V24.js - Moteur de Simulation "Capacity First"
 // 🎯 Part des contraintes (planches disponibles) pour proposer des scénarios viables
-// 🆕 V21 : Tous les exports nommés pour compatibilité
+// 🔧 V21 FIX : Utilise la MÊME logique de calcul que calculPlanchesSimultanees
+// 🆕 V22 : Prise en compte du DÉLAI INTERCALAIRE (vacances entre cultures)
+// 🆕 V24 : Prise en compte LONGUEUR PLANCHES (serre 30m = ×2)
+//          + Calcul capacité en équivalent 15m
 
 import { SAISON } from './constantes';
 import { compositionsPaniers, getSaison } from '../data/compositionsPaniers';
 import { cultures } from '../data/cultures';
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 🆕 V24 : CALCUL CAPACITÉ EN ÉQUIVALENT 15M
+ * Prend en compte les différentes longueurs de planches par jardin
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export function calculerCapaciteEquivalent15m(jardins) {
+  if (!jardins || jardins.length === 0) return 0;
+  
+  return jardins.reduce((sum, j) => {
+    const facteur = (j.longueurPlanche || 15) / 15;
+    return sum + (j.nombrePlanches * facteur);
+  }, 0);
+}
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -19,12 +37,116 @@ export const COEFFICIENTS_MATURITE = {
   expert: 1.00
 };
 
-// Types de cycles pour le calcul des rotations
+// 🔧 V21 FIX : Types de cycles avec rotations EXACTES de cultures_V14.js
 export const TYPES_CYCLES = {
-  LONGUE_DUREE: { rotations: 1, cultures: ['tomate', 'aubergine', 'concombre'] },
-  ROTATION_MOYENNE: { rotations: 2, cultures: ['courgette', 'haricot', 'carotte', 'betterave', 'basilic'] },
-  ROTATION_RAPIDE: { rotations: 4, cultures: ['radis', 'mesclun', 'verdurette'] }
+  LONGUE_DUREE: { 
+    cultures: ['tomate', 'aubergine', 'concombre', 'poivron'],
+    methode: 'IJM_CAPACITE_HEBDO'
+  },
+  ROTATION_MOYENNE: { 
+    cultures: ['courgette', 'haricot', 'carotte', 'betterave', 'basilic'],
+    methode: 'SERIES_ROTATIONS'
+  },
+  ROTATION_RAPIDE: { 
+    cultures: ['radis', 'mesclun', 'verdurette', 'epinard'],
+    methode: 'SERIES_ROTATIONS'
+  }
 };
+
+// 🔧 V21 FIX : Rotations MAX par culture (sans délai intercalaire)
+const ROTATIONS_MAX_PAR_CULTURE = {
+  tomate: 1,
+  aubergine: 1,
+  concombre: 1,
+  poivron: 1,
+  courgette: 2,
+  haricot: 2,
+  carotte: 2,
+  betterave: 2,
+  basilic: 2,
+  radis: 3,
+  mesclun: 3.5,
+  verdurette: 4,
+  epinard: 3
+};
+
+// 🆕 V22 : Délai intercalaire par défaut (vacances entre 2 cultures)
+// ⚠️ SYNCHRONISÉ avec calculPlanchesSimultanees_V22.js et cultures.js
+const DELAI_INTERCALAIRE_DEFAUT = {
+  tomate: 2,      // Nettoyage résidus important
+  aubergine: 2,
+  concombre: 2,
+  poivron: 2,
+  courgette: 2,   // 🔧 FIX: Synchronisé avec Cultures (était 1)
+  haricot: 2,     // 🔧 FIX: Synchronisé avec Cultures (était 1)
+  carotte: 1,
+  betterave: 2,   // 🔧 FIX: Synchronisé avec Cultures (était 1)
+  basilic: 2,     // 🔧 FIX: Synchronisé avec Cultures (était 1)
+  radis: 1,       // Cycle court = vacances courtes
+  mesclun: 1,
+  verdurette: 1,
+  epinard: 1
+};
+
+// 🆕 V22 : Durée d'un cycle complet (occupation planche en semaines)
+// ⚠️ SYNCHRONISÉ avec calculPlanchesSimultanees_V22.js
+const DUREE_CYCLE_SEMAINES = {
+  tomate: 25,     // Occupe toute la saison
+  aubergine: 20,
+  concombre: 16,
+  poivron: 18,
+  courgette: 10,
+  haricot: 9,
+  carotte: 10,
+  betterave: 9,
+  basilic: 10,
+  radis: 5,
+  mesclun: 5,
+  verdurette: 5,
+  epinard: 6
+};
+
+// 🔧 V21 FIX : Durées de récolte pour formule IJM (depuis cultures_V14.js)
+const DUREE_RECOLTE_SEMAINES = {
+  tomate: 25,
+  aubergine: 20,
+  concombre: 16,
+  poivron: 16,
+  courgette: 10,
+  haricot: 5,
+  carotte: 6,
+  betterave: 4,
+  basilic: 10,
+  radis: 4,
+  mesclun: 8,
+  verdurette: 5,
+  epinard: 6
+};
+
+/**
+ * 🆕 V22 : Calcule le nombre de rotations effectives avec délai intercalaire
+ */
+function calculerRotationsEffectives(cultureId, delaiIntercalaire = null) {
+  const rotationsMax = ROTATIONS_MAX_PAR_CULTURE[cultureId] || 1;
+  const dureeCycle = DUREE_CYCLE_SEMAINES[cultureId] || 10;
+  const delai = delaiIntercalaire ?? DELAI_INTERCALAIRE_DEFAUT[cultureId] ?? 1;
+  
+  // Pour les cultures longue durée, pas d'impact (1 seule rotation)
+  if (rotationsMax === 1) {
+    return 1;
+  }
+  
+  // Durée effective d'un cycle avec le délai
+  const dureeCycleAvecDelai = dureeCycle + delai;
+  
+  // Rotations possibles sur la saison
+  const rotationsEffectives = Math.min(
+    rotationsMax,
+    Math.floor(SAISON.duree / dureeCycleAvecDelai)
+  );
+  
+  return Math.max(1, rotationsEffectives);
+}
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -40,7 +162,7 @@ export function calculerBesoinsSaison(marche) {
     besoins[legume] = 0;
   });
   
-  // Calculer sur toutes les semaines de saison (18-38)
+  // Calculer sur toutes les semaines de saison (18-37)
   for (let semaine = SAISON.debut; semaine <= SAISON.fin; semaine++) {
     const saison = getSaison(semaine);
     const compositions = compositionsPaniers[saison];
@@ -71,7 +193,23 @@ export function calculerBesoinsSaison(marche) {
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * CALCUL DES PLANCHES NÉCESSAIRES PAR CULTURE
+ * 🔧 V21 FIX : CLASSIFIER UNE CULTURE PAR TYPE DE CYCLE
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+function getTypeCycle(cultureId) {
+  for (const [type, config] of Object.entries(TYPES_CYCLES)) {
+    if (config.cultures.includes(cultureId)) {
+      return type;
+    }
+  }
+  return 'ROTATION_MOYENNE'; // Par défaut
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 🔧 V22 FIX : CALCUL DES PLANCHES NÉCESSAIRES PAR CULTURE
+ * Utilise la MÊME logique double que calculPlanchesSimultanees_V22.js
+ * 🆕 Prend en compte le délai intercalaire pour ajuster les rotations
  * ═══════════════════════════════════════════════════════════════════════════
  */
 export function calculerPlanchesParCulture(besoins, options = {}) {
@@ -98,31 +236,58 @@ export function calculerPlanchesParCulture(besoins, options = {}) {
       ? culture.rendement.planche30m 
       : (culture.rendement.planche15m || culture.rendement.planche30m / 2);
     
-    // Appliquer coefficient de maturité
+    // Rendement avec coefficient
     const rendementEffectif = rendementBase * coefficient;
     
-    // Déterminer le nombre de rotations possibles
-    let rotations = 1;
-    for (const [type, config] of Object.entries(TYPES_CYCLES)) {
-      if (config.cultures.includes(culture.id)) {
-        rotations = config.rotations;
-        break;
-      }
+    // 🔧 V22 FIX : Déterminer le type de cycle et les rotations EFFECTIVES
+    const typeCycle = getTypeCycle(culture.id);
+    const rotationsMax = ROTATIONS_MAX_PAR_CULTURE[culture.id] || 1;
+    const rotationsEffectives = calculerRotationsEffectives(culture.id); // 🆕 V22
+    const delaiIntercalaire = DELAI_INTERCALAIRE_DEFAUT[culture.id] || 1;
+    const dureeRecolte = DUREE_RECOLTE_SEMAINES[culture.id] || 10;
+    
+    let planches;
+    let methodeCalcul;
+    
+    // 🔧 V22 FIX : Double logique de calcul avec délai intercalaire
+    if (typeCycle === 'LONGUE_DUREE') {
+      // ═══════════════════════════════════════════════════════════════════
+      // FORMULE IJM (capacité hebdomadaire)
+      // Pour les cultures qui occupent la planche toute la saison
+      // Planches = Besoin_hebdo / Capacité_hebdo_par_planche
+      // Le délai intercalaire n'a pas d'impact (1 seule rotation)
+      // ═══════════════════════════════════════════════════════════════════
+      const besoinHebdo = besoin / SAISON.duree;
+      const capaciteHebdo = rendementEffectif / dureeRecolte;
+      planches = Math.ceil(besoinHebdo / capaciteHebdo);
+      methodeCalcul = 'IJM';
+      
+    } else {
+      // ═══════════════════════════════════════════════════════════════════
+      // FORMULE SÉRIES / ROTATIONS - 🆕 V22 AVEC DÉLAI INTERCALAIRE
+      // 
+      // Le délai intercalaire RÉDUIT le nombre de rotations possibles
+      // rotationsEffectives = floor(Saison / (Durée_cycle + Délai))
+      // 
+      // ⚠️ IMPORTANT : Utiliser rendementBase (BRUT, sans coefficient)
+      // ═══════════════════════════════════════════════════════════════════
+      const nombreSeries = Math.ceil(besoin / rendementBase);
+      planches = Math.ceil(nombreSeries / rotationsEffectives); // 🆕 V22 : rotations effectives
+      methodeCalcul = 'SERIES';
     }
-    
-    // Production par planche sur la saison
-    const productionParPlanche = rendementEffectif * rotations;
-    
-    // Planches nécessaires
-    const planches = Math.ceil(besoin / productionParPlanche);
     
     resultats[culture.id] = {
       planches,
       besoin: Math.round(besoin * 10) / 10,
-      rendement: Math.round(rendementEffectif * 10) / 10,
-      rotations,
-      productionParPlanche: Math.round(productionParPlanche * 10) / 10,
-      type: rotations >= 3 ? 'rapide' : rotations >= 2 ? 'moyenne' : 'longue'
+      rendement: Math.round(rendementBase * 10) / 10,
+      rendementEffectif: Math.round(rendementEffectif * 10) / 10,
+      rotationsMax,                    // 🆕 V22 : Max théorique
+      rotations: rotationsEffectives,  // 🆕 V22 : Effectives avec délai
+      delaiIntercalaire,               // 🆕 V22
+      typeCycle,
+      methodeCalcul,
+      type: typeCycle === 'LONGUE_DUREE' ? 'longue' : 
+            typeCycle === 'ROTATION_RAPIDE' ? 'rapide' : 'moyenne'
     };
     
     planchesTotales += planches;
@@ -216,20 +381,20 @@ export function trouverCoefficientViable(marche, capacitePlanches, options = {})
       restaurant: Math.round(marche.restaurant * coefficient)
     };
     
-    const besoins = calculerBesoinsSaison(marcheReduit);
-    const planches = calculerPlanchesParCulture(besoins, { niveauMaturite });
+    const besoinsReduits = calculerBesoinsSaison(marcheReduit);
+    const planchesReduites = calculerPlanchesParCulture(besoinsReduits, { niveauMaturite });
     
-    if (planches._total <= capacitePlanches * marge) {
+    if (planchesReduites._total <= capacitePlanches * marge) {
       coeffMin = coefficient;
     } else {
       coeffMax = coefficient;
     }
   }
   
-  return { 
-    coefficient: Math.round(coeffMin * 100) / 100, 
-    planchesNecessaires: Math.round(capacitePlanches * marge),
-    viable: false 
+  return {
+    coefficient: Math.round(coefficient * 100) / 100,
+    planchesNecessaires: planches100._total,
+    viable: false
   };
 }
 
@@ -369,8 +534,8 @@ export function estimerCA(marche) {
   // CA hebdomadaire restaurant (prix grand)
   const caHebdoRestaurant = marche.restaurant * prixGrand;
   
-  // Total sur 21 semaines de saison
-  const nbSemaines = SAISON.fin - SAISON.debut + 1;
+  // Total sur la saison (utiliser SAISON.duree)
+  const nbSemaines = SAISON.duree || 20;
   return (caHebdoAMAP + caHebdoMarche + caHebdoRestaurant) * nbSemaines;
 }
 

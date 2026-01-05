@@ -1,12 +1,22 @@
-// calculPlanchesSimultanees.js V20 - DATES DE RÉCOLTE CORRIGÉES
-// 🎯 FIX CRITIQUE : Les tomates ne récoltent plus dès S18 !
-// 🆕 V20 : Calcul DANS LE BON SENS (Semis → Plantation → Récolte)
+// calculPlanchesSimultanees.js V22 - AVEC DÉLAI INTERCALAIRE
+// 🎯 FIX CRITIQUE : Deux formules selon le type de culture
+// 🆕 V22 : Le délai intercalaire (vacances entre cultures) impacte le nombre de rotations
+// 
+// 1. LONGUE DURÉE (tomate, aubergine) : Formule IJM capacité hebdo
+//    N = D_hebdo / (R × Coef / T_récolte)
+//    → Pas impacté par délai (1 seule rotation)
+//
+// 2. ROTATION RAPIDE/MOYENNE (mesclun, radis, courgette) : Formule Séries / Rotations
+//    Rotations_réelles = floor(Saison / (Durée_cycle + Délai_intercalaire))
+//    N = (Besoin_saison / Rendement) / Rotations_réelles
+//
+// Source: Analyse expert IJM + Documents exercice
 
-import { NIVEAUX_MATURITE } from './constantes';
+import { NIVEAUX_MATURITE, SAISON } from './constantes';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * CLASSIFICATION UNIFIÉE DES TYPES DE CYCLES
+ * CLASSIFICATION DES TYPES DE CYCLES
  * ═══════════════════════════════════════════════════════════════════════════
  */
 export const TYPES_CYCLES = {
@@ -15,115 +25,159 @@ export const TYPES_CYCLES = {
     cultures: ['tomate', 'aubergine', 'concombre', 'poivron'],
     label: 'Long',
     icon: '🏠',
-    description: '1 cycle/saison - Cultures permanentes'
+    description: '1 cycle/saison - Formule IJM capacité hebdo'
   },
   ROTATION_MOYENNE: { 
     rotations: 2, 
     cultures: ['courgette', 'haricot', 'carotte', 'betterave', 'basilic', 'chou'],
     label: 'Moyen',
     icon: '🔄',
-    description: '2 cycles/saison - Succession possible'
+    description: '2 cycles/saison - Formule Séries/Rotations'
   },
   ROTATION_RAPIDE: { 
     rotations: 4, 
     cultures: ['radis', 'mesclun', 'verdurette', 'epinard', 'navet'],
     label: 'Rapide',
     icon: '⚡',
-    description: '4 cycles/saison - Rotations multiples'
+    description: '4+ cycles/saison - Formule Séries/Rotations'
   }
 };
 
 /**
- * 🆕 V20 : DONNÉES AGRONOMIQUES RÉALISTES
- * Dates de semis, durées de pépinière, jours à maturité, durée récolte
+ * ═══════════════════════════════════════════════════════════════════════════
+ * DONNÉES AGRONOMIQUES V21
+ * ═══════════════════════════════════════════════════════════════════════════
  */
 const DONNEES_AGRONOMIQUES = {
   tomate: {
-    semisDebut: 10,           // S10 = début mars (pépinière chauffée)
-    dureePepiniere: 6,        // 6 semaines en pépinière
-    plantationDebut: 16,      // S16 = mi-avril (après gelées)
-    joursAMaturite: 70,       // 70 jours plant → première récolte
-    dureeRecolte: 12          // 12 semaines de récolte
-    // → Première récolte = S16 + 10 = S26 (fin juin) ✅
+    semisDebut: 10,
+    dureePepiniere: 6,
+    plantationDebut: 16,
+    joursAMaturite: 70,
+    dureeRecolteSemaines: 25,  // 180 jours selon doc IJM
+    dureeCycleSemaines: 25,    // 🆕 V22 : Durée totale d'occupation planche
+    delaiIntercalaireDefaut: 2, // 🆕 V22 : Vacances par défaut (nettoyage résidus)
+    rotationsMax: 1
   },
   aubergine: {
     semisDebut: 8,
     dureePepiniere: 8,
     plantationDebut: 18,
     joursAMaturite: 80,
-    dureeRecolte: 10
+    dureeRecolteSemaines: 20,
+    dureeCycleSemaines: 20,
+    delaiIntercalaireDefaut: 2,
+    rotationsMax: 1
   },
   concombre: {
     semisDebut: 12,
     dureePepiniere: 4,
     plantationDebut: 18,
     joursAMaturite: 50,
-    dureeRecolte: 10
+    dureeRecolteSemaines: 16,
+    dureeCycleSemaines: 16,
+    delaiIntercalaireDefaut: 2,
+    rotationsMax: 1
   },
   poivron: {
     semisDebut: 8,
     dureePepiniere: 10,
     plantationDebut: 20,
     joursAMaturite: 75,
-    dureeRecolte: 10
+    dureeRecolteSemaines: 18,
+    dureeCycleSemaines: 18,
+    delaiIntercalaireDefaut: 2,
+    rotationsMax: 1
   },
   courgette: {
     semisDebut: 14,
     dureePepiniere: 3,
     plantationDebut: 18,
     joursAMaturite: 45,
-    dureeRecolte: 14
+    dureeRecolteSemaines: 10,
+    dureeCycleSemaines: 10,
+    delaiIntercalaireDefaut: 2,  // 🔧 FIX: Synchronisé avec cultures.js (était 1)
+    rotationsMax: 2
   },
   haricot: {
     semisDebut: 16,
-    dureePepiniere: 0,        // Semis direct
+    dureePepiniere: 0,
     plantationDebut: 16,
     joursAMaturite: 60,
-    dureeRecolte: 4
+    dureeRecolteSemaines: 5,
+    dureeCycleSemaines: 9,
+    delaiIntercalaireDefaut: 2,  // 🔧 FIX: Synchronisé avec cultures.js (était 1)
+    rotationsMax: 2
   },
   carotte: {
     semisDebut: 12,
     dureePepiniere: 0,
     plantationDebut: 12,
     joursAMaturite: 70,
-    dureeRecolte: 8
+    dureeRecolteSemaines: 6,
+    dureeCycleSemaines: 10,
+    delaiIntercalaireDefaut: 1,
+    rotationsMax: 2
   },
   betterave: {
     semisDebut: 14,
     dureePepiniere: 0,
     plantationDebut: 14,
     joursAMaturite: 60,
-    dureeRecolte: 6
+    dureeRecolteSemaines: 4,
+    dureeCycleSemaines: 9,
+    delaiIntercalaireDefaut: 2,  // 🔧 FIX: Synchronisé avec cultures.js (était 1)
+    rotationsMax: 2
   },
   radis: {
     semisDebut: 10,
     dureePepiniere: 0,
     plantationDebut: 10,
     joursAMaturite: 25,
-    dureeRecolte: 2
+    dureeRecolteSemaines: 4,
+    dureeCycleSemaines: 5,
+    delaiIntercalaireDefaut: 1,  // Cycle court = vacances courtes
+    rotationsMax: 3
   },
   mesclun: {
     semisDebut: 10,
     dureePepiniere: 0,
     plantationDebut: 10,
     joursAMaturite: 30,
-    dureeRecolte: 3
+    dureeRecolteSemaines: 8,
+    dureeCycleSemaines: 5,
+    delaiIntercalaireDefaut: 1,
+    rotationsMax: 3.5
   },
   verdurette: {
     semisDebut: 10,
     dureePepiniere: 0,
     plantationDebut: 10,
     joursAMaturite: 35,
-    dureeRecolte: 3
+    dureeRecolteSemaines: 5,
+    dureeCycleSemaines: 5,
+    delaiIntercalaireDefaut: 1,
+    rotationsMax: 4
   },
   basilic: {
     semisDebut: 12,
     dureePepiniere: 4,
     plantationDebut: 18,
     joursAMaturite: 40,
-    dureeRecolte: 12
+    dureeRecolteSemaines: 10,
+    dureeCycleSemaines: 10,
+    delaiIntercalaireDefaut: 2,  // 🔧 FIX: Synchronisé avec cultures.js (était 1)
+    rotationsMax: 2
   }
 };
+
+/**
+ * Récupère les données agronomiques d'une culture
+ */
+export function getDonneesAgro(culture) {
+  const cultureId = culture.id?.toLowerCase() || culture.nom?.toLowerCase() || '';
+  return DONNEES_AGRONOMIQUES[cultureId] || null;
+}
 
 /**
  * Classifie une culture selon son type de cycle
@@ -137,6 +191,7 @@ export function classifierCulture(culture) {
     }
   }
   
+  // Fallback basé sur la durée d'occupation
   const dureeOccupation = culture.dureeOccupationPlanche || 60;
   if (dureeOccupation >= 90) return 'LONGUE_DUREE';
   if (dureeOccupation >= 45) return 'ROTATION_MOYENNE';
@@ -147,20 +202,34 @@ export function classifierCulture(culture) {
  * Obtient le nombre de rotations pour une culture
  */
 export function getRotationsPourCulture(culture) {
+  const donneesAgro = getDonneesAgro(culture);
+  if (donneesAgro?.rotationsMax) {
+    return donneesAgro.rotationsMax;
+  }
+  
+  // Fallback sur rotationsPossibles de la culture
+  if (culture.rotationsPossibles) {
+    return culture.rotationsPossibles;
+  }
+  
   const typeCycle = classifierCulture(culture);
   return TYPES_CYCLES[typeCycle]?.rotations || 1;
 }
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * CALCUL DES PLANCHES PHYSIQUES
- * Formule : Planches = BesoinSaison / (Rendement × Coefficient × Rotations)
+ * 🆕 V21 : CALCUL DES PLANCHES PHYSIQUES - DOUBLE LOGIQUE
+ * 
+ * LONGUE DURÉE : N = D_hebdo / (R × Coef / T_récolte)
+ * ROTATIONS    : N = (Besoin_saison / Rendement) / Rotations
  * ═══════════════════════════════════════════════════════════════════════════
  */
 export function calculerPlanchesPhysiques(culture, besoinSaison, options = {}) {
   const {
     niveauMaturite = 'debutant',
-    longueurPlanche = 15
+    longueurPlanche = 15,
+    saisonDuree = SAISON?.duree || 20,
+    delaiIntercalaire = 1  // 🆕 V22 : Délai entre 2 cultures (vacances)
   } = options;
   
   const coefficient = NIVEAUX_MATURITE[niveauMaturite]?.coefficient || 0.70;
@@ -170,52 +239,151 @@ export function calculerPlanchesPhysiques(culture, besoinSaison, options = {}) {
     : (culture.rendement.planche15m || culture.rendement.planche30m / 2);
   
   const rendementEffectif = rendementBase * coefficient;
-  const rotations = getRotationsPourCulture(culture);
   const typeCycle = classifierCulture(culture);
   
-  // Production par planche sur la SAISON (avec rotations)
-  const productionParPlancheSaison = rendementEffectif * rotations;
+  // Données agronomiques
+  const donneesAgro = getDonneesAgro(culture);
+  const dureeRecolteSemaines = culture.dureeRecolteSemaines 
+    || donneesAgro?.dureeRecolteSemaines
+    || (culture.dureeRecolte ? Math.ceil(culture.dureeRecolte / 7) : 8);
   
-  // Planches PHYSIQUES nécessaires
-  const planchesPhysiques = Math.ceil(besoinSaison / productionParPlancheSaison);
+  // 🆕 V22 : Durée d'un cycle complet (occupation planche)
+  const dureeCycleSemaines = donneesAgro?.dureeCycleSemaines 
+    || culture.dureeCycleSemaines
+    || Math.ceil((culture.dureeOccupationPlanche || 60) / 7);
   
-  console.log(`📐 [${typeCycle}] ${culture.nom}:`, {
-    besoinSaison: besoinSaison.toFixed(1),
-    rendementEffectif: rendementEffectif.toFixed(1),
-    rotations,
-    productionParPlanche: productionParPlancheSaison.toFixed(1),
-    planchesPhysiques
-  });
+  let planchesPhysiques;
+  let methodeCalcul;
+  let details = {};
+  let rotationsEffectives;
+  
+  if (typeCycle === 'LONGUE_DUREE') {
+    // ═══════════════════════════════════════════════════════════════════════
+    // FORMULE IJM : Capacité hebdomadaire
+    // Pour les cultures qui occupent la planche toute la saison
+    // Le délai intercalaire n'a pas d'impact (1 seule rotation)
+    // ═══════════════════════════════════════════════════════════════════════
+    const besoinHebdo = besoinSaison / saisonDuree;
+    const capaciteHebdo = rendementEffectif / dureeRecolteSemaines;
+    planchesPhysiques = Math.ceil(besoinHebdo / capaciteHebdo);
+    rotationsEffectives = 1;
+    
+    methodeCalcul = 'IJM_CAPACITE_HEBDO';
+    details = {
+      besoinHebdo,
+      capaciteHebdo,
+      dureeRecolteSemaines,
+      delaiIntercalaire,
+      rotationsEffectives,
+      formule: `⌈${besoinHebdo.toFixed(1)} / (${rendementEffectif.toFixed(0)} / ${dureeRecolteSemaines})⌉ = ${planchesPhysiques}`
+    };
+    
+    console.log(`📐 V22 [${typeCycle}] ${culture.nom} - Méthode IJM:`);
+    console.log(`   Besoin: ${besoinHebdo.toFixed(1)} kg/sem`);
+    console.log(`   Capacité: ${rendementEffectif.toFixed(0)} kg / ${dureeRecolteSemaines} sem = ${capaciteHebdo.toFixed(2)} kg/sem/planche`);
+    console.log(`   → ${planchesPhysiques} planches (délai non applicable, 1 rotation)`);
+    
+  } else {
+    // ═══════════════════════════════════════════════════════════════════════
+    // FORMULE SÉRIES / ROTATIONS - 🆕 V22 AVEC DÉLAI INTERCALAIRE
+    // 
+    // Le délai intercalaire RÉDUIT le nombre de rotations possibles :
+    // Rotations_réelles = floor(Saison / (Durée_cycle + Délai))
+    // 
+    // Exemple mesclun avec délai 2 sem :
+    //   - Cycle : 5 sem
+    //   - Avec délai : 5 + 2 = 7 sem
+    //   - Rotations : 20 / 7 = 2.8 → 2 rotations (au lieu de 4)
+    // ═══════════════════════════════════════════════════════════════════════
+    
+    // Durée effective d'un cycle avec le délai de vacances
+    const dureeCycleAvecDelai = dureeCycleSemaines + delaiIntercalaire;
+    
+    // Nombre de rotations RÉELLES possibles sur la saison
+    const rotationsMax = getRotationsPourCulture(culture);
+    rotationsEffectives = Math.min(
+      rotationsMax,
+      Math.floor(saisonDuree / dureeCycleAvecDelai)
+    );
+    
+    // Sécurité : au moins 1 rotation
+    rotationsEffectives = Math.max(1, rotationsEffectives);
+    
+    // Nombre de séries nécessaires
+    const nombreSeries = Math.ceil(besoinSaison / rendementBase);
+    
+    // Planches nécessaires = séries / rotations effectives
+    planchesPhysiques = Math.ceil(nombreSeries / rotationsEffectives);
+    
+    methodeCalcul = 'SERIES_ROTATIONS';
+    details = {
+      nombreSeries,
+      rotationsMax,
+      rotationsEffectives,
+      dureeCycleSemaines,
+      delaiIntercalaire,
+      dureeCycleAvecDelai,
+      rendementParSerie: rendementBase,
+      formule: `⌈${nombreSeries} séries / ${rotationsEffectives} rot⌉ = ${planchesPhysiques} (délai ${delaiIntercalaire}sem)`
+    };
+    
+    console.log(`📐 V22 [${typeCycle}] ${culture.nom} - Méthode Séries/Rotations:`);
+    console.log(`   Besoin saison: ${besoinSaison.toFixed(0)} kg`);
+    console.log(`   Rendement/série: ${rendementBase.toFixed(0)} kg (BRUT) → ${nombreSeries} séries`);
+    console.log(`   Cycle: ${dureeCycleSemaines}sem + délai ${delaiIntercalaire}sem = ${dureeCycleAvecDelai}sem`);
+    console.log(`   Rotations: ${rotationsMax} max → ${rotationsEffectives} effectives (saison ${saisonDuree}sem)`);
+    console.log(`   → ${planchesPhysiques} planches (${nombreSeries} séries ÷ ${rotationsEffectives} rot)`);
+  }
+  
+  // Production totale estimée (avec rotations effectives)
+  const productionParPlancheSaison = rendementEffectif * rotationsEffectives;
+  const productionTotaleEstimee = planchesPhysiques * productionParPlancheSaison;
   
   return {
     planchesPhysiques,
+    methodeCalcul,
     rendementEffectif,
     rendementBase,
     coefficient,
-    rotations,
+    rotations: rotationsEffectives,  // 🆕 V22 : Retourner rotations effectives
+    rotationsMax: getRotationsPourCulture(culture),
     typeCycle,
     productionParPlancheSaison,
-    besoinSaison
+    productionTotaleEstimee,
+    besoinSaison,
+    delaiIntercalaire,
+    dureeCycleSemaines,
+    details
   };
 }
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * Calcul pour l'étalement des séries (flux continu de récolte)
+ * CALCUL POUR L'ÉCHELONNEMENT DES SÉRIES
  * ═══════════════════════════════════════════════════════════════════════════
  */
 export function calculerPlanchesSimultanees(culture, besoinHebdo, facteurSecurite = 0.7, delaiIntercalaire = 1) {
-  const rendementBrut = culture.rendement.planche30m;
-  const rendementNet = rendementBrut * facteurSecurite;
+  const rendementBase = culture.rendement?.planche15m || culture.rendement?.planche30m / 2 || 100;
+  const rendementNet = rendementBase * facteurSecurite;
   
-  const fenetreRecolteJours = culture.dureeOccupationPlanche;
-  const fenetreRecolteSemaines = fenetreRecolteJours / 7;
+  const donneesAgro = getDonneesAgro(culture);
+  const fenetreRecolteSemaines = culture.dureeRecolteSemaines 
+    || donneesAgro?.dureeRecolteSemaines
+    || (culture.dureeRecolte ? culture.dureeRecolte / 7 : 6);
   
+  const fenetreRecolteJours = fenetreRecolteSemaines * 7;
+  const dureeOccupationPlanche = culture.dureeOccupationPlanche || 60;
+  const dureeOccupationReelleSemaines = Math.ceil(dureeOccupationPlanche / 7) + delaiIntercalaire;
+  
+  // Capacité hebdomadaire d'une planche
   const capaciteHebdo = rendementNet / fenetreRecolteSemaines;
+  
+  // Planches simultanées pour couvrir le besoin hebdo
   const planchesSimultanees = Math.ceil(besoinHebdo / capaciteHebdo);
   
-  const dureeOccupationReelleSemaines = fenetreRecolteSemaines + delaiIntercalaire;
-  const decalageOptimal = Math.max(1, dureeOccupationReelleSemaines / planchesSimultanees);
+  const decalageOptimal = fenetreRecolteSemaines > 0 
+    ? Math.max(1, fenetreRecolteSemaines / planchesSimultanees)
+    : 2;
   
   const rotations = getRotationsPourCulture(culture);
   const nombreSeriesRecommandees = planchesSimultanees * rotations;
@@ -223,7 +391,7 @@ export function calculerPlanchesSimultanees(culture, besoinHebdo, facteurSecurit
   return {
     planchesSimultanees,
     rendementNet,
-    rendementBrut,
+    rendementBrut: rendementBase,
     capaciteHebdo,
     fenetreRecolteSemaines,
     fenetreRecolteJours,
@@ -239,27 +407,24 @@ export function calculerPlanchesSimultanees(culture, besoinHebdo, facteurSecurit
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * 🆕 V20 : GÉNÉRATION DE SÉRIES AVEC DATES CORRECTES
- * Les dates sont calculées DANS LE BON SENS : Semis → Plantation → Récolte
+ * GÉNÉRATION DE SÉRIES AVEC DATES CORRECTES
  * ═══════════════════════════════════════════════════════════════════════════
  */
-export function genererSeriesEchelonnees(culture, calcul, planchesPhysiques, delaiIntercalaire = 1, saisonDebut = 18, saisonFin = 38) {
+export function genererSeriesEchelonnees(culture, calcul, planchesPhysiques, delaiIntercalaire = 1, saisonDebut = 18, saisonFin = 37) {
   const series = [];
-  const { rotations } = calcul;
+  const rotations = calcul.rotations || getRotationsPourCulture(culture);
   
-  // 🆕 V20 : Utiliser les données agronomiques RÉALISTES si disponibles
   const cultureId = culture.id?.toLowerCase() || '';
   const donneesAgro = DONNEES_AGRONOMIQUES[cultureId] || {};
   
-  // Durées en semaines (avec fallback sur les données de la culture)
+  // Durées en semaines
   const dureePepiniere = donneesAgro.dureePepiniere ?? Math.ceil((culture.dureeEnPepiniere || 0) / 7);
-  const joursAMaturite = donneesAgro.joursAMaturite || culture.joursAMaturite || culture.dtm || 60;
+  const joursAMaturite = donneesAgro.joursAMaturite || culture.joursAMaturite || 60;
   const semainesCroissance = Math.ceil(joursAMaturite / 7);
-  const dureeRecolte = donneesAgro.dureeRecolte || Math.ceil((culture.dureeOccupationPlanche || 42) / 7 / 2);
+  const dureeRecolte = donneesAgro.dureeRecolteSemaines || Math.ceil((culture.dureeRecolte || 42) / 7);
   
-  // 🆕 V20 : Date de DÉBUT réaliste (semis ou plantation selon la culture)
+  // Date de début réaliste
   const semisDebutSaison = donneesAgro.semisDebut || Math.max(8, saisonDebut - semainesCroissance - dureePepiniere);
-  const plantationDebutSaison = donneesAgro.plantationDebut || (semisDebutSaison + dureePepiniere);
   
   // Durée totale d'occupation d'une planche
   const dureeOccupationTotale = semainesCroissance + dureeRecolte + delaiIntercalaire;
@@ -269,44 +434,25 @@ export function genererSeriesEchelonnees(culture, calcul, planchesPhysiques, del
     ? Math.min(3, Math.max(1, Math.floor(dureeRecolte / planchesPhysiques)))
     : 0;
   
-  console.log(`📅 V20 Génération ${culture.nom}:`);
-  console.log(`   Pépinière: ${dureePepiniere} sem | Croissance: ${semainesCroissance} sem | Récolte: ${dureeRecolte} sem`);
-  console.log(`   Semis débute: S${semisDebutSaison} | Plantation: S${plantationDebutSaison} | Première récolte: S${plantationDebutSaison + semainesCroissance}`);
-  
-  // 🆕 V20 : Générer les séries DANS LE BON SENS
-  for (let rotationIdx = 0; rotationIdx < rotations; rotationIdx++) {
+  // Générer les séries
+  for (let rotationIdx = 0; rotationIdx < Math.ceil(rotations); rotationIdx++) {
     for (let plancheIdx = 0; plancheIdx < planchesPhysiques; plancheIdx++) {
       
-      // Décalage pour cette rotation
       const decalageRotation = rotationIdx * dureeOccupationTotale;
-      
-      // Décalage entre planches pour étaler la récolte
       const decalagePlanche = plancheIdx * decalageEntrePlanches;
       
-      // 🆕 V20 : CALCUL CORRECT - partir du SEMIS et avancer dans le temps
-      
-      // 1. Date de SEMIS (début du processus)
       const semaineSemis = semisDebutSaison + decalageRotation + decalagePlanche;
-      
-      // 2. Date de PLANTATION = semis + durée pépinière
       const semainePlantation = dureePepiniere > 0 
         ? semaineSemis + dureePepiniere 
-        : semaineSemis; // Semis direct
-      
-      // 3. Date de début de RÉCOLTE = plantation + croissance
-      // 🎯 C'est ICI que le bug était ! Avant, semaineRecolteDebut = S18 directement
+        : semaineSemis;
       const semaineRecolteDebut = semainePlantation + semainesCroissance;
-      
-      // 4. Date de fin de récolte
       const semaineRecolteFin = semaineRecolteDebut + dureeRecolte;
       
-      // Vérifier que la série est pertinente (récolte au moins partiellement en saison)
+      // Vérifier que la série est pertinente
       if (semaineRecolteDebut > saisonFin + 6) {
-        console.log(`   ⏭️ Série Pl.${plancheIdx + 1} rot.${rotationIdx + 1} ignorée (récolte trop tardive: S${Math.round(semaineRecolteDebut)})`);
         continue;
       }
       
-      // Occupation de la planche (de la plantation à la fin de récolte + délai)
       const occupationDebut = Math.max(1, Math.round(semainePlantation));
       const occupationFin = Math.round(semaineRecolteFin) + delaiIntercalaire;
       
@@ -318,15 +464,14 @@ export function genererSeriesEchelonnees(culture, calcul, planchesPhysiques, del
         semainePlantation: Math.max(1, Math.round(semainePlantation)),
         semaineRecolteDebut: Math.round(semaineRecolteDebut),
         semaineRecolteFin: Math.round(semaineRecolteFin),
-        semaineDebut: Math.round(semaineRecolteDebut), // Alias pour compatibilité
-        semaineFin: Math.round(semaineRecolteFin),     // Alias pour compatibilité
+        semaineDebut: Math.round(semaineRecolteDebut),
+        semaineFin: Math.round(semaineRecolteFin),
         occupationDebut,
         occupationFin,
         dureeOccupation: occupationFin - occupationDebut,
         delaiIntercalaire,
         horsVente: semaineRecolteDebut > saisonFin,
         rotation: rotationIdx + 1,
-        // 🆕 V20 : Objet dates pour le Gantt
         dates: {
           semis: Math.round(semaineSemis),
           plantation: Math.round(semainePlantation),
@@ -334,15 +479,7 @@ export function genererSeriesEchelonnees(culture, calcul, planchesPhysiques, del
           recolteFin: Math.round(semaineRecolteFin)
         }
       });
-      
-      console.log(`   ✅ Pl.${plancheIdx + 1}: Semis S${Math.round(semaineSemis)} → Plant. S${Math.round(semainePlantation)} → Récolte S${Math.round(semaineRecolteDebut)}-S${Math.round(semaineRecolteFin)}`);
     }
-  }
-  
-  console.log(`✅ ${series.length} séries générées pour ${culture.nom}`);
-  if (series.length > 0) {
-    console.log(`   Première récolte: S${Math.min(...series.map(s => s.semaineRecolteDebut))}`);
-    console.log(`   Dernière récolte: S${Math.max(...series.map(s => s.semaineRecolteFin))}`);
   }
   
   // Créer les planches
@@ -374,7 +511,7 @@ export function genererSeriesEchelonnees(culture, calcul, planchesPhysiques, del
 /**
  * Détecte les fenêtres d'opportunité pour cultures intercalaires
  */
-function detecterGaps(planches, series, saisonDebut = 18, saisonFin = 38) {
+function detecterGaps(planches, series, saisonDebut = 18, saisonFin = 37) {
   const FENETRE_AVANT = 10;
   const FENETRE_APRES = 44;
   
@@ -412,17 +549,14 @@ function detecterGaps(planches, series, saisonDebut = 18, saisonFin = 38) {
 export function calculerBesoinsIntrants(culture, series) {
   const nombreSeries = series.length;
   
-  // Graines
   const grainesParPlanche = culture.semis?.grainesParPlanche || 100;
   const grainesASemer = grainesParPlanche * nombreSeries;
   const poidsGraines = grainesASemer * (culture.semis?.poidsGraine || 0.01);
   
-  // Substrat (si pépinière)
   const litresParPlanche = culture.dureeEnPepiniere > 0 ? 5 : 0;
   const substratLitres = litresParPlanche * nombreSeries;
   const nombreBacs = Math.ceil(substratLitres / 20);
   
-  // Coûts estimés
   const coutGraines = grainesASemer * 0.01;
   const coutSubstrat = substratLitres * 0.5;
   const coutTotal = coutGraines + coutSubstrat;
@@ -442,7 +576,7 @@ export function calculerBesoinsIntrants(culture, series) {
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * FONCTION PRINCIPALE : Génère un plan complet pour une culture
+ * FONCTION PRINCIPALE - GÉNÉRATION DU PLAN COMPLET
  * ═══════════════════════════════════════════════════════════════════════════
  */
 export function genererPlanComplet(culture, marche, calculerBesoinHebdo, delaiIntercalaire = 1, options = {}) {
@@ -452,67 +586,75 @@ export function genererPlanComplet(culture, marche, calculerBesoinHebdo, delaiIn
     planchesDisponibles = null
   } = options;
   
-  console.log(`🚀 V20 Génération plan ${culture.nom} | Maturité: ${niveauMaturite} | Délai: ${delaiIntercalaire}s | Planches: ${longueurPlanche}m`);
+  const saisonDebut = SAISON?.debut || 18;
+  const saisonFin = SAISON?.fin || 37;
+  const saisonDuree = SAISON?.duree || 20;
+  
+  console.log(`🚀 V22 Génération plan ${culture.nom} | Maturité: ${niveauMaturite} | Planches: ${longueurPlanche}m | Délai: ${delaiIntercalaire}sem`);
   
   // 1. Calculer le besoin TOTAL sur la saison
   let besoinTotal = 0;
-  let semaines = 0;
   
-  for (let semaine = 18; semaine <= 38; semaine++) {
+  for (let semaine = saisonDebut; semaine <= saisonFin; semaine++) {
     const besoins = calculerBesoinHebdo(marche, semaine);
     if (besoins[culture.id] && besoins[culture.id].total > 0) {
       besoinTotal += besoins[culture.id].total;
-      semaines++;
     }
   }
   
-  const besoinHebdo = semaines > 0 ? besoinTotal / semaines : 0;
-  console.log(`📊 Besoins ${culture.nom}: total=${besoinTotal.toFixed(1)}, hebdo moyen=${besoinHebdo.toFixed(1)}`);
+  const besoinHebdo = besoinTotal / saisonDuree;
+  console.log(`📊 Besoins ${culture.nom}: total=${besoinTotal.toFixed(1)}kg, hebdo=${besoinHebdo.toFixed(1)}kg/sem`);
   
-  // 2. Calculer planches PHYSIQUES avec classification UNIFIÉE
+  // 2. 🆕 V22 : Calcul avec délai intercalaire
   const calculPhysique = calculerPlanchesPhysiques(culture, besoinTotal, {
     niveauMaturite,
-    longueurPlanche
+    longueurPlanche,
+    saisonDuree,
+    delaiIntercalaire  // 🆕 V22 : Passer le délai pour ajuster les rotations
   });
   
-  console.log(`✅ ${culture.nom}: ${calculPhysique.planchesPhysiques * calculPhysique.rotations} séries sur ${calculPhysique.planchesPhysiques} planches physiques (${calculPhysique.typeCycle})`);
+  const planchesPhysiques = calculPhysique.planchesPhysiques;
   
-  // 3. Calculer planches simultanées (pour échelonnement)
+  console.log(`✅ ${culture.nom}: ${planchesPhysiques} planches (méthode: ${calculPhysique.methodeCalcul})`);
+  
+  // 3. Calculer pour l'échelonnement
   const coefficient = NIVEAUX_MATURITE[niveauMaturite]?.coefficient || 0.70;
   const calcul = calculerPlanchesSimultanees(culture, besoinHebdo, coefficient, delaiIntercalaire);
   
-  // 4. 🆕 V20 : Générer séries avec algorithme CORRIGÉ (dates réalistes)
+  // 4. Générer séries avec dates réalistes
   const { series, planchesReelles, planchesDetail, gaps } = genererSeriesEchelonnees(
     culture, 
     { ...calcul, rotations: calculPhysique.rotations },
-    calculPhysique.planchesPhysiques,
-    delaiIntercalaire
+    planchesPhysiques,
+    delaiIntercalaire,
+    saisonDebut,
+    saisonFin
   );
   
   // 5. Calculer les besoins en intrants
   const intrants = calculerBesoinsIntrants(culture, series);
   
-  // 6. Utiliser planchesPhysiques comme valeur finale
-  const planchesFinales = calculPhysique.planchesPhysiques;
-  
-  // 7. Assembler le calcul corrigé
+  // 6. Assembler le résultat
   const calculCorrige = {
     ...calcul,
-    planchesSimultanees: planchesFinales,
-    planchesPhysiques: planchesFinales,
-    totalPlanchesSaison: planchesFinales,
+    planchesSimultanees: planchesPhysiques,
+    planchesPhysiques: planchesPhysiques,
+    totalPlanchesSaison: planchesPhysiques,
     rotations: calculPhysique.rotations,
     typeCycle: calculPhysique.typeCycle,
+    methodeCalcul: calculPhysique.methodeCalcul,
     coefficient,
     niveauMaturite,
     longueurPlanche,
     delaiIntercalaire,
-    planchesDetail
+    planchesDetail,
+    details: calculPhysique.details
   };
   
-  // 8. Calculer production et couverture estimées
-  const productionEstimee = planchesFinales * calculPhysique.productionParPlancheSaison;
-  const tauxCouverture = besoinTotal > 0 ? Math.round((productionEstimee / besoinTotal) * 100) : 100;
+  // 7. Calculer production et couverture
+  const tauxCouverture = besoinTotal > 0 
+    ? Math.round((calculPhysique.productionTotaleEstimee / besoinTotal) * 100) 
+    : 100;
   
   return {
     culture,
@@ -524,17 +666,18 @@ export function genererPlanComplet(culture, marche, calculerBesoinHebdo, delaiIn
     intrants,
     
     resume: {
-      planchesSimultanees: planchesFinales,
-      planchesPhysiques: planchesFinales,
+      planchesSimultanees: planchesPhysiques,
+      planchesPhysiques: planchesPhysiques,
       planchesParSerie: 1,
       nombreSeries: series.length,
-      totalPlanches: planchesFinales,
+      totalPlanches: planchesPhysiques,
       frequence: Math.round(calcul.decalageOptimal * 10) / 10,
       fenetreRecolte: calcul.fenetreRecolteJours,
       delaiIntercalaire,
       rotations: calculPhysique.rotations,
       typeCycle: calculPhysique.typeCycle,
-      productionEstimee: Math.round(productionEstimee),
+      methodeCalcul: calculPhysique.methodeCalcul,
+      productionEstimee: Math.round(calculPhysique.productionTotaleEstimee),
       tauxCouverture
     }
   };
@@ -556,22 +699,6 @@ export function validerPlan(plan, jardins) {
     });
   }
   
-  if (plan.culture.fenetres?.semis) {
-    const semainesSemis = plan.series.map(s => s.semaineSemis);
-    const fenetreSemis = plan.culture.fenetres.semis;
-    
-    const semiHorsFenetre = semainesSemis.filter(s => 
-      s < fenetreSemis.debut || s > fenetreSemis.fin
-    );
-    
-    if (semiHorsFenetre.length > 0) {
-      alertes.push({
-        type: 'avertissement',
-        message: `${semiHorsFenetre.length} semis hors fenêtre optimale (S${fenetreSemis.debut}-S${fenetreSemis.fin})`
-      });
-    }
-  }
-  
   return {
     valide: alertes.filter(a => a.type === 'erreur').length === 0,
     alertes,
@@ -582,9 +709,35 @@ export function validerPlan(plan, jardins) {
 }
 
 /**
- * ═══════════════════════════════════════════════════════════════════════════
- * CALCUL ÉCONOMIE INTERCALAGE
- * ═══════════════════════════════════════════════════════════════════════════
+ * Calcule le nombre RÉEL de planches simultanées
+ */
+export function calculerPlanchesSimultaneesReelles(series) {
+  if (!series || series.length === 0) return 0;
+  
+  let planchesMax = 0;
+  
+  const semaineMin = Math.min(...series.map(s => s.occupationDebut));
+  const semaineMax = Math.max(...series.map(s => s.occupationFin));
+  
+  for (let semaine = semaineMin; semaine <= semaineMax; semaine++) {
+    let planchesOccupees = 0;
+    
+    series.forEach(serie => {
+      if (semaine >= serie.occupationDebut && semaine <= serie.occupationFin) {
+        planchesOccupees += serie.planchesUtilisees;
+      }
+    });
+    
+    if (planchesOccupees > planchesMax) {
+      planchesMax = planchesOccupees;
+    }
+  }
+  
+  return planchesMax;
+}
+
+/**
+ * Calcule les économies potentielles par intercalage
  */
 export function calculerEconomieIntercalage(culturesSelectionnees) {
   // Cultures hôtes (longue durée) - offrent des fenêtres
@@ -672,34 +825,6 @@ export function calculerRepartitionOptimale(culturesSelectionnees, jardins) {
   };
 }
 
-/**
- * Calcule le nombre RÉEL de planches simultanées
- */
-export function calculerPlanchesSimultaneesReelles(series) {
-  if (!series || series.length === 0) return 0;
-  
-  let planchesMax = 0;
-  
-  const semaineMin = Math.min(...series.map(s => s.occupationDebut));
-  const semaineMax = Math.max(...series.map(s => s.occupationFin));
-  
-  for (let semaine = semaineMin; semaine <= semaineMax; semaine++) {
-    let planchesOccupees = 0;
-    
-    series.forEach(serie => {
-      if (semaine >= serie.occupationDebut && semaine <= serie.occupationFin) {
-        planchesOccupees += serie.planchesUtilisees;
-      }
-    });
-    
-    if (planchesOccupees > planchesMax) {
-      planchesMax = planchesOccupees;
-    }
-  }
-  
-  return planchesMax;
-}
-
 // Exports par défaut
 export default {
   calculerPlanchesPhysiques,
@@ -711,7 +836,9 @@ export default {
   validerPlan,
   classifierCulture,
   getRotationsPourCulture,
+  getDonneesAgro,
   calculerEconomieIntercalage,
   calculerRepartitionOptimale,
-  TYPES_CYCLES
+  TYPES_CYCLES,
+  DONNEES_AGRONOMIQUES
 };

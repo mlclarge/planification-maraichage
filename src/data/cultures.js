@@ -1,5 +1,6 @@
-// cultures.js V13 - Base de données des cultures CORRIGÉE
-// 🛠️ FIX : rotationsPossibles corrigés pour carottes et autres légumes racines
+// cultures.js V14 - Base de données des cultures avec dureeRecolteSemaines
+// 🆕 V14 : Ajout de dureeRecolteSemaines pour la formule IJM (capacité hebdo)
+// 🛠️ V13 : rotationsPossibles corrigés pour carottes et autres légumes racines
 // Sources: Chartes Institut Jardinier Maraîcher + Documents fournis
 
 export const cultures = [
@@ -30,6 +31,7 @@ export const cultures = [
     dureeEnPepiniere: 49,
     dureeOccupationPlanche: 120, // 17 semaines - toute la saison
     dureeRecolte: 84, // 12 semaines de récolte (S28-S40)
+    dureeRecolteSemaines: 25, // 🆕 V14 : 180 jours selon doc IJM - pour formule capacité hebdo
     rotationsPossibles: 1, // ✅ Correct : 1 seule rotation possible
     
     rendement: {
@@ -91,6 +93,7 @@ export const cultures = [
     dureeEnPepiniere: 15,
     dureeOccupationPlanche: 70, // 10 semaines
     dureeRecolte: 42, // 6 semaines
+    dureeRecolteSemaines: 10, // 🆕 V14 : pour formule capacité hebdo
     rotationsPossibles: 2, // ✅ 2 rotations possibles
     
     rendement: {
@@ -150,6 +153,7 @@ export const cultures = [
     dureeEnPepiniere: 28,
     dureeOccupationPlanche: 90, // 13 semaines
     dureeRecolte: 56, // 8 semaines
+    dureeRecolteSemaines: 16, // 🆕 V14 : pour formule capacité hebdo
     rotationsPossibles: 1, // Longue durée
     
     rendement: {
@@ -207,6 +211,7 @@ export const cultures = [
     dureeEnPepiniere: 70,
     dureeOccupationPlanche: 120, // 17 semaines
     dureeRecolte: 84, // 12 semaines
+    dureeRecolteSemaines: 20, // 🆕 V14 : pour formule capacité hebdo
     rotationsPossibles: 1,
     
     rendement: {
@@ -263,6 +268,7 @@ export const cultures = [
     dureeEnPepiniere: 14,
     dureeOccupationPlanche: 56, // 8 semaines
     dureeRecolte: 35, // 5 semaines
+    dureeRecolteSemaines: 5, // 🆕 V14 : pour formule capacité hebdo
     joursAMaturite: 60,
     rotationsPossibles: 2, // 🛠️ V13 : 2 rotations possibles (pas 1)
     
@@ -322,6 +328,7 @@ export const cultures = [
     dureeEnPepiniere: 30,
     dureeOccupationPlanche: 56, // 8 semaines (4 croissance + 4 récolte)
     dureeRecolte: 28, // 4 semaines
+    dureeRecolteSemaines: 8, // 🆕 V14 : 4 croissance + 4 récolte selon doc IJM
     rotationsPossibles: 3, // ✅ 3 cycles par saison
     nombreCoupesParCycle: 3,
     
@@ -381,6 +388,7 @@ export const cultures = [
     },
     dureeOccupationPlanche: 35, // 5 semaines
     dureeRecolte: 14, // 2 semaines
+    dureeRecolteSemaines: 5, // 🆕 V14 : pour formule capacité hebdo
     rotationsPossibles: 4, // 🛠️ V13 : 4 cycles possibles (pas 3)
     nombreCoupesParCycle: 2,
     
@@ -440,6 +448,7 @@ export const cultures = [
     },
     dureeOccupationPlanche: 90, // 13 semaines
     dureeRecolte: 21, // 3 semaines de récolte
+    dureeRecolteSemaines: 6, // 🆕 V14 : pour formule capacité hebdo
     
     // 🛠️ V13 FIX MAJEUR : rotationsPossibles = 2 (pas 1 !)
     // Avec 13 semaines d'occupation + 1 sem repos = 14 sem/cycle
@@ -505,6 +514,7 @@ export const cultures = [
     dureeEnPepiniere: 30,
     dureeOccupationPlanche: 70, // 10 semaines
     dureeRecolte: 14, // 2 semaines
+    dureeRecolteSemaines: 4, // 🆕 V14 : pour formule capacité hebdo
     rotationsPossibles: 2, // ✅ Correct
     typeRecolte: 'bottes',
     
@@ -562,7 +572,8 @@ export const cultures = [
     },
     dureeOccupationPlanche: 28, // 4 semaines
     dureeRecolte: 7, // 1 semaine
-    rotationsPossibles: 5, // 🛠️ V13 : 5 cycles possibles (pas 3)
+    dureeRecolteSemaines: 4, // 🆕 V14 : cycle court complet
+    rotationsPossibles: 3, // 🆕 V14 : 3 rotations conservatrices (exercice IJM)
     typeRecolte: 'bottes',
     
     rendement: {
@@ -620,6 +631,7 @@ export const cultures = [
     dureeEnPepiniere: 30,
     dureeOccupationPlanche: 70, // 10 semaines
     dureeRecolte: 42, // 6 semaines
+    dureeRecolteSemaines: 10, // 🆕 V14 : pour formule capacité hebdo
     rotationsPossibles: 2,
     
     rendement: {

@@ -1,6 +1,7 @@
-// Resultats_v21_responsive.jsx - AVEC LISTE LÉGUMES DANS CA PLANIFIÉ
-// 🆕 V21 : Affiche la liste des légumes avec leur CA dans le bloc "CA Planifié"
-// 🎯 L'utilisateur voit directement quelles cultures contribuent au CA
+// Resultats_V24.jsx - CALCULS CORRIGÉS
+// 🔧 V24 : Suppression doublon Main d'œuvre/Salaires
+// 🔧 V24 : Un seul poste "Coûts Main d'œuvre et intrants"
+// 🔧 V24 : Suppression blocs inutiles (3 CA, comparaison niveaux)
 // 📱 V21.1 : Optimisations responsive mobile
 
 import React, { useMemo, useState } from 'react';
@@ -10,9 +11,8 @@ import {
   Info, HelpCircle, ArrowRight, ShoppingCart, Leaf, AlertTriangle,
   BarChart3, Target, Wallet, Factory, Store, Lightbulb
 } from 'lucide-react';
-import { calculerIntrants, calculerBesoinHebdo } from '../data/compositionsPaniers';
+import { calculerBesoinHebdo } from '../data/compositionsPaniers';
 import { SAISON, estDansSaison, NIVEAUX_MATURITE } from '../utils/constantes';
-import { calculerEconomieIntercalage } from '../utils/calculPlanchesSimultanees';
 
 // Prix contextuels par niveau de marché (€/kg ou €/botte)
 const prixContextuels = {
@@ -124,7 +124,9 @@ const Resultats = ({ marche, jardins, culturesSelectionnees, niveauMaturite = 'd
   }, [marche]);
 
   // 2. CA PLANIFIÉ (Production réelle × Prix) - Basé sur les cultures planifiées
+  // 🔧 V25 : Utilise totalPlanches au lieu de compter les séries
   const caPlanifie = useMemo(() => {
+    // Calculer la demande totale par légume sur la saison
     const demandeSaison = {};
     for (let semaine = SAISON.debut; semaine <= SAISON.fin; semaine++) {
       const besoins = calculerBesoinHebdo(marche, semaine);
@@ -134,22 +136,28 @@ const Resultats = ({ marche, jardins, culturesSelectionnees, niveauMaturite = 'd
       });
     }
 
+    console.log('📊 CA Planifié - Demande saison:', demandeSaison);
+
     const parCulture = culturesSelectionnees.map(culture => {
-      const planchesSaison = (culture.series || []).filter(serie => {
-        const d = serie.semaineDebut || serie.semaineRecolteDebut;
-        const f = serie.semaineFin || serie.semaineRecolteFin;
-        return d >= SAISON.debut - 4 && f <= SAISON.fin + 2;
-      }).reduce((sum, s) => sum + (s.planchesUtilisees || 1), 0);
+      // 🔧 V25 : Utiliser totalPlanches (calculé par l'algo) au lieu de compter les séries
+      const planchesSaison = culture.totalPlanches || 0;
       
-      const rendementBase = culture.rendement?.[`planche${longueurPlanche}m`] || culture.rendement?.planche30m || 100;
+      // Récupérer le rendement depuis les données de la culture
+      const rendementParPlanche = culture.rendement?.[`planche${longueurPlanche}m`] 
+        || culture.rendement?.planche15m 
+        || culture.rendement?.planche30m / 2  // Si seulement 30m dispo, diviser par 2
+        || 50; // Fallback
+      
       const coefficient = niveauConfig.coefficient || 0.7;
-      const productionSaison = planchesSaison * rendementBase * coefficient;
+      const productionSaison = planchesSaison * rendementParPlanche * coefficient;
       
       const prixUnitaire = culture.prix?.unitaire || prixContextuels.moyen[culture.id] || 3;
       const demandeLegume = demandeSaison[culture.id] || 0;
       const productionVendable = Math.min(productionSaison, demandeLegume);
       const surplus = Math.max(0, productionSaison - demandeLegume);
       const caSaison = productionVendable * prixUnitaire;
+
+      console.log(`📊 ${culture.nom}: ${planchesSaison} pl × ${rendementParPlanche} kg × ${coefficient} = ${productionSaison.toFixed(0)} kg → CA ${caSaison.toFixed(0)} €`);
 
       return {
         id: culture.id,
@@ -162,7 +170,7 @@ const Resultats = ({ marche, jardins, culturesSelectionnees, niveauMaturite = 'd
         surplus,
         caSaison,
         prixUnitaire,
-        rendementBase,
+        rendementParPlanche,
         coefficient
       };
     });
@@ -170,41 +178,74 @@ const Resultats = ({ marche, jardins, culturesSelectionnees, niveauMaturite = 'd
     const total = parCulture.reduce((sum, c) => sum + c.caSaison, 0);
     const surplusTotalKg = parCulture.reduce((sum, c) => sum + c.surplus, 0);
 
+    console.log('📊 CA Planifié TOTAL:', total.toFixed(0), '€');
+
     return { parCulture, total, surplusTotalKg };
   }, [culturesSelectionnees, marche, niveauConfig, longueurPlanche]);
 
-  // 3. TOTAUX FINANCIERS
+  // 3. TOTAUX FINANCIERS - 🔧 V24 FIX
   const totaux = useMemo(() => {
-    const surface = jardins.reduce((sum, j) => sum + (j.nombrePlanches * j.longueurPlanche * 0.8), 0);
+    // 🔧 V24 : Calcul surface avec valeurs par défaut sécurisées
+    const surface = jardins.reduce((sum, j) => {
+      const longueur = j.longueurPlanche || 15;
+      const largeur = 0.8;
+      return sum + (j.nombrePlanches * longueur * largeur);
+    }, 0);
     const planches = jardins.reduce((sum, j) => sum + j.nombrePlanches, 0);
-    const intrants = calculerIntrants(surface);
-    const heures = surface * 1.23;
+    
+    // 🔧 V24 : Intrants variables basés sur les cultures sélectionnées
+    // Formule cohérente avec le Simulateur :
+    // - Fertilisation : ~0.27 €/m² (compost 0.20 + amendement 0.05 + foliaire 0.02)
+    // - Semences : ~0.50 €/m² (estimation moyenne)
+    // - Protection : ~0.30 €/m² (amortis sur plusieurs années)
+    // - Biotraitement : ~0.16 €/m² 
+    // TOTAL : ~1.23 €/m² (cohérent avec l'ancienne formule)
+    const intrantsVariablesEstimes = Math.round(surface * 1.23);
+    
+    // Intrants fixes (amortissements) : ~2.87 €/m²
+    // - Matériel : 0.55 €/m²
+    // - Serres/bâches : 0.37 €/m²
+    // - Irrigation : 0.15 €/m²
+    // - Véhicule : 0.70 €/m²
+    // - Matériel vente : 0.40 €/m²
+    // - Énergie : 0.20 €/m²
+    // - Admin : 0.50 €/m²
+    const intrantsFixesEstimes = Math.round(surface * 2.87);
+    
+    console.log('📊 Résultats V24 - Calculs:', {
+      surface: surface.toFixed(0) + ' m²',
+      planches,
+      intrantsVariables: intrantsVariablesEstimes + ' €',
+      intrantsFixes: intrantsFixesEstimes + ' €'
+    });
     
     return {
       surface,
       planches,
       ca: caPlanifie.total,
-      intrantsVariables: intrants.total || surface * 1.23,
-      intrantsFixes: surface * 2.87,
-      mainOeuvre: heures * 28,
-      heures
+      intrantsVariables: intrantsVariablesEstimes,
+      intrantsFixes: intrantsFixesEstimes
     };
   }, [jardins, caPlanifie]);
 
-  // Salaires
-  const coutSalairesTotal = nombreSalaries * salaireAnnuel;
-  const chargesSociales = Math.round(coutSalairesTotal * 0.45);
-  const coutTotalSalaires = coutSalairesTotal + chargesSociales;
+  // 🔧 V24 : Configuration salariés (unique source de coût main d'œuvre)
+  const coutMainOeuvreTotal = useMemo(() => {
+    const salaireBrut = nombreSalaries * salaireAnnuel;
+    const charges = Math.round(salaireBrut * 0.45);
+    return salaireBrut + charges;
+  }, [nombreSalaries, salaireAnnuel]);
   
-  // Marges
-  const margeOperationnelle = totaux.ca - totaux.intrantsVariables - totaux.mainOeuvre - coutTotalSalaires;
+  // 🔧 V24 : Marges CORRIGÉES (plus de doublon)
+  // Marge = CA - Intrants variables - Main d'œuvre
+  const margeOperationnelle = totaux.ca - totaux.intrantsVariables - coutMainOeuvreTotal;
   const margeComplete = margeOperationnelle - totaux.intrantsFixes;
   const isRentableOperationnel = margeOperationnelle >= 0;
   const isRentableComplet = margeComplete >= 0;
 
-  // ETP
+  // ETP (pour info seulement)
+  const heuresEstimees = totaux.surface * 1.23;
   const heuresAnnuelles = 1820;
-  const etp = totaux.heures / heuresAnnuelles;
+  const etp = heuresEstimees / heuresAnnuelles;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // RENDU
@@ -233,14 +274,17 @@ const Resultats = ({ marche, jardins, culturesSelectionnees, niveauMaturite = 'd
         </div>
         
         {/* KPIs rapides - 📱 Responsive grid */}
+        {/* 🔧 V24 : Clarification CA Planifié vs CA Commercial */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 md:gap-3">
           <div className="bg-green-50 p-2 md:p-3 rounded-lg border border-green-200 text-center">
             <p className="text-xs text-gray-600">CA Planifié</p>
             <p className="text-lg md:text-xl font-bold text-green-600">{totaux.ca.toLocaleString()} €</p>
+            <p className="text-[10px] text-gray-500">Production réelle</p>
           </div>
           <div className="bg-blue-50 p-2 md:p-3 rounded-lg border border-blue-200 text-center">
             <p className="text-xs text-gray-600">CA Commercial</p>
             <p className="text-lg md:text-xl font-bold text-blue-600">{caCommercial.saison.total.toLocaleString()} €</p>
+            <p className="text-[10px] text-gray-500">Demande clients</p>
           </div>
           <div className={`p-2 md:p-3 rounded-lg border text-center ${isRentableOperationnel ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
             <p className="text-xs text-gray-600">Marge Opérat.</p>
@@ -255,91 +299,21 @@ const Resultats = ({ marche, jardins, culturesSelectionnees, niveauMaturite = 'd
             </p>
           </div>
         </div>
+        
+        {/* 🔧 V24 : Alerte si écart significatif entre CA Commercial et CA Planifié */}
+        {caCommercial.saison.total > 0 && totaux.ca < caCommercial.saison.total * 0.9 && (
+          <div className="mt-3 p-3 bg-amber-50 border border-amber-300 rounded-lg text-sm">
+            <p className="text-amber-800">
+              <span className="font-bold">⚠️ Écart de {Math.round((1 - totaux.ca / caCommercial.saison.total) * 100)}%</span> entre la demande clients ({caCommercial.saison.total.toLocaleString()} €) et votre production planifiée ({totaux.ca.toLocaleString()} €).
+            </p>
+            <p className="text-amber-700 text-xs mt-1">
+              → Ajoutez des cultures ou augmentez les planches pour répondre à toute la demande.
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* 1. Récapitulatif des 3 CA */}
-      <Section id="recap" title="Les 3 Chiffres d'Affaires" icon="💰" defaultOpen={true} color="green">
-        <div className="space-y-4">
-          {/* CA Commercial */}
-          <div className="p-3 md:p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-              <h4 className="font-bold text-blue-900 flex items-center">
-                <ShoppingCart className="w-4 h-4 md:w-5 md:h-5 mr-2" />
-                CA Commercial (Demande clients)
-              </h4>
-              <span className="text-xl md:text-2xl font-bold text-blue-600">{caCommercial.saison.total.toLocaleString()} €</span>
-            </div>
-            <p className="text-xs md:text-sm text-blue-700 mb-2">
-              Ce que les clients paient pour les paniers et ventes sur 21 semaines.
-            </p>
-            {/* 📱 Responsive grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs md:text-sm">
-              <div className="bg-white p-2 rounded">AMAP: {caCommercial.saison.amap.toLocaleString()} €</div>
-              <div className="bg-white p-2 rounded">Marché: {caCommercial.saison.marche.toLocaleString()} €</div>
-              <div className="bg-white p-2 rounded">Resto: {caCommercial.saison.restaurant.toLocaleString()} €</div>
-            </div>
-          </div>
-
-          {/* CA Planifié */}
-          <div className="p-3 md:p-4 bg-green-50 rounded-lg border border-green-200">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-              <h4 className="font-bold text-green-900 flex items-center">
-                <Leaf className="w-4 h-4 md:w-5 md:h-5 mr-2" />
-                CA Planifié (Production réelle)
-              </h4>
-              <span className="text-xl md:text-2xl font-bold text-green-600">{caPlanifie.total.toLocaleString()} €</span>
-            </div>
-            <p className="text-xs md:text-sm text-green-700 mb-2">
-              Ce que vos cultures planifiées peuvent réellement générer (plafonné à la demande).
-            </p>
-            
-            {/* 🆕 V21 : Liste des légumes avec CA - 📱 Responsive */}
-            {caPlanifie.parCulture.length > 0 && (
-              <div className="mt-3">
-                <p className="text-xs font-medium text-green-800 mb-2">Détail par culture :</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {caPlanifie.parCulture
-                    .filter(c => c.caSaison > 0)
-                    .sort((a, b) => b.caSaison - a.caSaison)
-                    .slice(0, 8)
-                    .map(culture => (
-                      <div key={culture.id} className="flex items-center justify-between bg-white p-2 rounded text-xs md:text-sm">
-                        <span className="flex items-center">
-                          <span className="mr-1">{culture.icone}</span>
-                          <span className="truncate max-w-[100px] sm:max-w-none">{culture.nom}</span>
-                        </span>
-                        <span className="font-bold text-green-600 ml-2">{culture.caSaison.toLocaleString()} €</span>
-                      </div>
-                    ))}
-                </div>
-                {caPlanifie.parCulture.filter(c => c.caSaison > 0).length > 8 && (
-                  <p className="text-xs text-gray-500 mt-2">
-                    ... et {caPlanifie.parCulture.filter(c => c.caSaison > 0).length - 8} autres cultures
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Surplus */}
-          {caPlanifie.surplusTotalKg > 0 && (
-            <div className="p-3 md:p-4 bg-orange-50 rounded-lg border border-orange-200">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <h4 className="font-bold text-orange-900 flex items-center">
-                  <AlertTriangle className="w-4 h-4 md:w-5 md:h-5 mr-2" />
-                  Surplus (Production > Demande)
-                </h4>
-                <span className="text-lg md:text-xl font-bold text-orange-600">{caPlanifie.surplusTotalKg.toFixed(0)} kg</span>
-              </div>
-              <p className="text-xs md:text-sm text-orange-700">
-                Production excédentaire non valorisée dans le CA planifié.
-              </p>
-            </div>
-          )}
-        </div>
-      </Section>
-
-      {/* 4. Calcul de Rentabilité */}
+      {/* 🔧 V24 : Bloc Calcul de Rentabilité CORRIGÉ */}
       <Section id="rentabilite" title="Calcul de Rentabilité" icon="🧮" color="indigo" defaultOpen={true}>
         <div className="mb-4 flex flex-wrap gap-2">
           <button
@@ -362,17 +336,29 @@ const Resultats = ({ marche, jardins, culturesSelectionnees, niveauMaturite = 'd
           </button>
         </div>
         
+        {/* 🔧 V24 : Plus de doublon Main d'œuvre / Salaires */}
         <div className="space-y-2 text-sm md:text-base">
           <div className="flex justify-between py-2 border-b">
             <span className="font-medium">CA Planifié (Saison)</span>
             <span className="font-bold text-green-600">{totaux.ca.toLocaleString()} €</span>
           </div>
-          <div className="flex justify-between"><span>- Intrants variables:</span><span className="text-orange-600">-{totaux.intrantsVariables.toLocaleString()} €</span></div>
+          <div className="flex justify-between">
+            <span>- Coûts intrants variables:</span>
+            <span className="text-orange-600">-{totaux.intrantsVariables.toLocaleString()} €</span>
+          </div>
           {niveauRentabilite === 'complete' && (
-            <div className="flex justify-between"><span>- Intrants fixes (amort.):</span><span className="text-red-600">-{totaux.intrantsFixes.toLocaleString()} €</span></div>
+            <div className="flex justify-between">
+              <span>- Intrants fixes (amort.):</span>
+              <span className="text-red-600">-{totaux.intrantsFixes.toLocaleString()} €</span>
+            </div>
           )}
-          <div className="flex justify-between"><span>- Main d'œuvre:</span><span className="text-orange-600">-{totaux.mainOeuvre.toLocaleString()} €</span></div>
-          <div className="flex justify-between"><span>- Salaires + charges:</span><span className="text-orange-600">-{coutTotalSalaires.toLocaleString()} €</span></div>
+          <div className="flex justify-between">
+            <span>- Coûts main d'œuvre:</span>
+            <span className="text-orange-600">-{coutMainOeuvreTotal.toLocaleString()} €</span>
+          </div>
+          <div className="text-xs text-gray-500 pl-4">
+            ({nombreSalaries} salarié(s) × {salaireAnnuel.toLocaleString()} € + 45% charges)
+          </div>
           <div className="flex justify-between pt-2 border-t-2">
             <span className="font-bold">Marge:</span>
             <span className={`font-bold text-lg md:text-xl ${(niveauRentabilite === 'operationnelle' ? margeOperationnelle : margeComplete) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -380,43 +366,17 @@ const Resultats = ({ marche, jardins, culturesSelectionnees, niveauMaturite = 'd
             </span>
           </div>
         </div>
-      </Section>
-
-      {/* 5. Comparaison des Deux Niveaux - 📱 Responsive table */}
-      <Section id="comparaison" title="Comparaison des Deux Niveaux" icon="📊" color="gray">
-        <div className="overflow-x-auto -mx-3 md:mx-0">
-          <table className="w-full text-sm min-w-[300px]">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="px-2 md:px-3 py-2 text-left">Niveau</th>
-                <th className="px-2 md:px-3 py-2 text-right">Marge</th>
-                <th className="px-2 md:px-3 py-2 text-center">Rentable?</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-t">
-                <td className="px-2 md:px-3 py-2 flex items-center">
-                  <Briefcase className="w-4 h-4 mr-1 md:mr-2 text-blue-600 flex-shrink-0" />
-                  <span className="truncate">Opérationnelle</span>
-                </td>
-                <td className="px-2 md:px-3 py-2 text-right font-bold">{margeOperationnelle.toLocaleString()} €</td>
-                <td className="px-2 md:px-3 py-2 text-center text-xl">{isRentableOperationnel ? '✅' : '⛔'}</td>
-              </tr>
-              <tr className="border-t">
-                <td className="px-2 md:px-3 py-2 flex items-center">
-                  <Building2 className="w-4 h-4 mr-1 md:mr-2 text-purple-600 flex-shrink-0" />
-                  <span className="truncate">Complète</span>
-                </td>
-                <td className="px-2 md:px-3 py-2 text-right font-bold">{margeComplete.toLocaleString()} €</td>
-                <td className="px-2 md:px-3 py-2 text-center text-xl">{isRentableComplet ? '✅' : '⛔'}</td>
-              </tr>
-              <tr className="border-t bg-gray-50">
-                <td className="px-2 md:px-3 py-2 font-bold">Différence</td>
-                <td className="px-2 md:px-3 py-2 text-right font-bold text-red-600">{(margeOperationnelle - margeComplete).toLocaleString()} €</td>
-                <td className="px-2 md:px-3 py-2 text-center text-xs">= Amortissements</td>
-              </tr>
-            </tbody>
-          </table>
+        
+        {/* Explication des indicateurs */}
+        <div className="mt-4 p-3 bg-gray-50 rounded-lg text-xs text-gray-600">
+          <p className="font-medium mb-1">💡 Explications :</p>
+          <ul className="list-disc list-inside space-y-1">
+            <li><strong>CA Planifié</strong> : Production réelle × prix de vente (plafonné à la demande)</li>
+            <li><strong>Intrants variables</strong> : Semences, fertilisation, protection (~1.23 €/m²)</li>
+            <li><strong>Main d'œuvre</strong> : Salaires + charges sociales (45%)</li>
+            <li><strong>Marge opérationnelle</strong> : CA - intrants variables - main d'œuvre</li>
+            <li><strong>Marge complète</strong> : Marge opérationnelle - amortissements</li>
+          </ul>
         </div>
       </Section>
 
@@ -446,73 +406,30 @@ const Resultats = ({ marche, jardins, culturesSelectionnees, niveauMaturite = 'd
             />
           </div>
         </div>
-        {/* 📱 Responsive grid */}
+        {/* 🔧 V24 : Affichage corrigé */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 md:gap-3">
           <div className="bg-blue-50 p-2 md:p-3 rounded border">
             <p className="text-xs">Salaires bruts</p>
-            <p className="text-base md:text-lg font-bold text-blue-600">{coutSalairesTotal.toLocaleString()} €</p>
+            <p className="text-base md:text-lg font-bold text-blue-600">{(nombreSalaries * salaireAnnuel).toLocaleString()} €</p>
           </div>
           <div className="bg-orange-50 p-2 md:p-3 rounded border">
             <p className="text-xs">Charges (45%)</p>
-            <p className="text-base md:text-lg font-bold text-orange-600">{chargesSociales.toLocaleString()} €</p>
+            <p className="text-base md:text-lg font-bold text-orange-600">{Math.round(nombreSalaries * salaireAnnuel * 0.45).toLocaleString()} €</p>
           </div>
           <div className="bg-purple-50 p-2 md:p-3 rounded border">
-            <p className="text-xs">Coût total</p>
-            <p className="text-base md:text-lg font-bold text-purple-600">{coutTotalSalaires.toLocaleString()} €</p>
+            <p className="text-xs">Coût main d'œuvre total</p>
+            <p className="text-base md:text-lg font-bold text-purple-600">{coutMainOeuvreTotal.toLocaleString()} €</p>
           </div>
         </div>
       </Section>
 
-      {/* 7. Main d'œuvre - 📱 Responsive table */}
-      <Section id="mo" title="Main d'œuvre (valorisée à 28 €/h)" icon="👷" badge={`${totaux.mainOeuvre.toLocaleString()} €`} color="blue">
-        <div className="overflow-x-auto -mx-3 md:mx-0">
-          <table className="w-full text-sm border-collapse min-w-[320px]">
-            <thead className="bg-blue-100">
-              <tr>
-                <th className="px-2 md:px-3 py-2 border text-left">Tâche</th>
-                <th className="px-2 md:px-3 py-2 border text-right">%</th>
-                <th className="px-2 md:px-3 py-2 border text-right">Heures</th>
-                <th className="px-2 md:px-3 py-2 border text-right">Coût</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td className="px-2 md:px-3 py-2 border">Récolte</td>
-                <td className="px-2 md:px-3 py-2 border text-right">60%</td>
-                <td className="px-2 md:px-3 py-2 border text-right">{(totaux.heures * 0.60).toFixed(0)} h</td>
-                <td className="px-2 md:px-3 py-2 border text-right font-bold">{(totaux.heures * 0.60 * 28).toLocaleString()} €</td>
-              </tr>
-              <tr>
-                <td className="px-2 md:px-3 py-2 border">Entretien</td>
-                <td className="px-2 md:px-3 py-2 border text-right">30%</td>
-                <td className="px-2 md:px-3 py-2 border text-right">{(totaux.heures * 0.30).toFixed(0)} h</td>
-                <td className="px-2 md:px-3 py-2 border text-right font-bold">{(totaux.heures * 0.30 * 28).toLocaleString()} €</td>
-              </tr>
-              <tr>
-                <td className="px-2 md:px-3 py-2 border">Implantation</td>
-                <td className="px-2 md:px-3 py-2 border text-right">10%</td>
-                <td className="px-2 md:px-3 py-2 border text-right">{(totaux.heures * 0.10).toFixed(0)} h</td>
-                <td className="px-2 md:px-3 py-2 border text-right font-bold">{(totaux.heures * 0.10 * 28).toLocaleString()} €</td>
-              </tr>
-            </tbody>
-            <tfoot className="bg-blue-200 font-bold">
-              <tr>
-                <td colSpan="2" className="px-2 md:px-3 py-2 border">TOTAL</td>
-                <td className="px-2 md:px-3 py-2 border text-right">{totaux.heures.toFixed(0)} h</td>
-                <td className="px-2 md:px-3 py-2 border text-right">{totaux.mainOeuvre.toLocaleString()} €</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </Section>
-
-      {/* 8. Temps de Travail et ETP - 📱 Responsive grid */}
-      <Section id="temps" title="Temps de Travail et ETP" icon="⏰" color="purple">
+      {/* 🔧 V24 : Temps de Travail et ETP - Estimations */}
+      <Section id="temps" title="Temps de Travail Estimé" icon="⏰" color="purple">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 md:gap-3">
           <div className="bg-purple-50 p-2 md:p-3 rounded border">
-            <p className="text-xs md:text-sm">Heures Totales</p>
-            <p className="text-xl md:text-2xl font-bold text-purple-600">{totaux.heures.toFixed(0)} h</p>
-            <p className="text-xs text-gray-500">{(totaux.heures / 52).toFixed(1)} h/sem</p>
+            <p className="text-xs md:text-sm">Heures Estimées</p>
+            <p className="text-xl md:text-2xl font-bold text-purple-600">{heuresEstimees.toFixed(0)} h</p>
+            <p className="text-xs text-gray-500">{(heuresEstimees / 52).toFixed(1)} h/sem</p>
           </div>
           <div className="bg-blue-50 p-2 md:p-3 rounded border">
             <p className="text-xs md:text-sm">ETP</p>
@@ -521,21 +438,24 @@ const Resultats = ({ marche, jardins, culturesSelectionnees, niveauMaturite = 'd
           </div>
           <div className="bg-green-50 p-2 md:p-3 rounded border">
             <p className="text-xs md:text-sm">Taux temps</p>
-            <p className="text-xl md:text-2xl font-bold text-green-600">{((totaux.heures / heuresAnnuelles) * 100).toFixed(0)} %</p>
+            <p className="text-xl md:text-2xl font-bold text-green-600">{((heuresEstimees / heuresAnnuelles) * 100).toFixed(0)} %</p>
             <p className="text-xs text-gray-500">d'un temps plein</p>
           </div>
         </div>
+        <p className="text-xs text-gray-500 mt-2">
+          💡 Estimation basée sur 1.23 h/m² de surface cultivée
+        </p>
       </Section>
 
-      {/* 9. Détail Intrants par Poste - 📱 Responsive table */}
-      <Section id="intrants" title="Détail Intrants par Poste" icon="🌱" badge={`${totaux.intrantsVariables.toLocaleString()} €`} color="orange">
+      {/* 🔧 V24 : Détail Intrants par Poste - Corrigé */}
+      <Section id="intrants" title="Coûts Intrants Variables" icon="🌱" badge={`${totaux.intrantsVariables.toLocaleString()} €`} color="orange">
         <div className="overflow-x-auto -mx-3 md:mx-0">
           <table className="w-full text-sm border-collapse min-w-[300px]">
             <thead className="bg-orange-100">
               <tr>
                 <th className="px-2 md:px-3 py-2 border text-left">Poste</th>
                 <th className="px-2 md:px-3 py-2 border text-right">€/m²</th>
-                <th className="px-2 md:px-3 py-2 border text-right">Total</th>
+                <th className="px-2 md:px-3 py-2 border text-right">Total ({totaux.surface.toFixed(0)} m²)</th>
               </tr>
             </thead>
             <tbody>
@@ -557,7 +477,8 @@ const Resultats = ({ marche, jardins, culturesSelectionnees, niveauMaturite = 'd
             </tbody>
             <tfoot className="bg-orange-200 font-bold">
               <tr>
-                <td colSpan="2" className="px-2 md:px-3 py-2 border">TOTAL VARIABLES</td>
+                <td className="px-2 md:px-3 py-2 border">TOTAL INTRANTS VARIABLES</td>
+                <td className="px-2 md:px-3 py-2 border text-right">1.23</td>
                 <td className="px-2 md:px-3 py-2 border text-right">{totaux.intrantsVariables.toLocaleString()} €</td>
               </tr>
             </tfoot>

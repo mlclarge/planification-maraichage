@@ -1,6 +1,7 @@
-// SimulateurScenarios.jsx V21 - 4 BLOCS COMPLETS
+// SimulateurScenarios.jsx V24 - AVEC CAPACITÉ ÉQUIVALENT 15M
 // 🎯 Ordre : Contraintes → Objectifs → Scénarios → Fournitures
 // 🆕 V21 : Scénarios cliquables, Fournitures par culture, Calculs automatiques
+// 🆕 V24 : Capacité en équivalent 15m (serre 30m = ×2)
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
@@ -130,8 +131,17 @@ const SimulateurScenarios = ({
   // CALCULS
   // ═══════════════════════════════════════════════════════════════════════
 
-  // Capacité totale des jardins
+  // 🆕 V24 : Capacité en ÉQUIVALENT 15m (serre 30m = ×2)
+  // Une planche de 30m produit 2× plus qu'une planche de 15m
   const capacitePlanches = useMemo(() => {
+    return jardins.reduce((sum, j) => {
+      const facteur = (j.longueurPlanche || 15) / 15;
+      return sum + (j.nombrePlanches * facteur);
+    }, 0);
+  }, [jardins]);
+
+  // Nombre de planches physiques (pour affichage)
+  const planchesPhysiques = useMemo(() => {
     return jardins.reduce((sum, j) => sum + j.nombrePlanches, 0);
   }, [jardins]);
 
@@ -418,7 +428,7 @@ const SimulateurScenarios = ({
       {/* ════════════════════════════════════════════════════════════════════
           BLOC 1 : VOS CONTRAINTES
           ════════════════════════════════════════════════════════════════════ */}
-      <Section id="contraintes" title="Vos Contraintes" icon={Settings} color="gray" badge={`${capacitePlanches} planches`}>
+      <Section id="contraintes" title="Vos Contraintes" icon={Settings} color="gray" badge={`${Math.round(capacitePlanches)} éq.15m`}>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Marché configuré */}
           <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
@@ -449,8 +459,14 @@ const SimulateurScenarios = ({
               Capacité Disponible
             </h4>
             <div className="text-center">
-              <div className="text-4xl font-bold text-green-600">{capacitePlanches}</div>
-              <div className="text-sm text-gray-600">Planches totales</div>
+              <div className="text-4xl font-bold text-green-600">{Math.round(capacitePlanches)}</div>
+              <div className="text-sm text-gray-600">éq. planches 15m</div>
+              {/* 🆕 V24 : Afficher détail si serre 30m */}
+              {planchesPhysiques !== capacitePlanches && (
+                <div className="text-xs text-green-600 mt-1 bg-green-100 rounded px-2 py-1">
+                  💡 {planchesPhysiques} physiques = {Math.round(capacitePlanches)} éq.15m (serre 30m = ×2)
+                </div>
+              )}
               <div className="text-xs text-gray-500 mt-1">
                 {jardins.length} jardin{jardins.length > 1 ? 's' : ''} • {surfaceTotale.toFixed(0)} m²
               </div>
@@ -613,7 +629,7 @@ const SimulateurScenarios = ({
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-gray-600">Utilisation des planches</span>
                     <span className={`font-bold ${impact.viable ? 'text-green-600' : 'text-red-600'}`}>
-                      {impact.planchesNecessaires} / {capacitePlanches}
+                      {impact.planchesNecessaires} / {Math.round(capacitePlanches)}
                     </span>
                   </div>
                   <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
@@ -640,10 +656,11 @@ const SimulateurScenarios = ({
                     </div>
                   </div>
                   <div className="bg-white rounded-lg p-3 text-center border">
-                    <div className="text-xs text-gray-500">CA Potentiel</div>
-                    <div className="text-2xl font-bold text-blue-600">
+                    <div className="text-xs text-gray-500">CA Marché</div>
+                    <div className="text-2xl font-bold text-green-600">
                       {impact.caEstime?.toLocaleString('fr-FR')}€
                     </div>
+                    <div className="text-[10px] text-gray-400">Demande clients</div>
                   </div>
                 </div>
 
@@ -744,188 +761,7 @@ const SimulateurScenarios = ({
         </div>
       </Section>
 
-      {/* ════════════════════════════════════════════════════════════════════
-          BLOC 4 : FOURNITURES & INTRANTS
-          ════════════════════════════════════════════════════════════════════ */}
-      <Section 
-        id="fournitures" 
-        title="Fournitures & Intrants" 
-        icon={Package} 
-        color="orange" 
-        badge={culturesSelectionnees.length > 0 ? `${fournituresCalculees.totaux.total.toFixed(0)} €` : 'Aucune culture'}
-      >
-        {culturesSelectionnees.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p>Sélectionnez des cultures dans l'onglet "Cultures" pour voir les fournitures nécessaires.</p>
-          </div>
-        ) : (
-          <>
-            {/* Totaux par catégorie */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-              <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
-                <Sprout className="w-5 h-5 mx-auto mb-1 text-green-600" />
-                <div className="text-xs text-gray-600">Semences</div>
-                <div className="text-lg font-bold text-green-700">{fournituresCalculees.totaux.semences.toFixed(0)} €</div>
-              </div>
-              <div className="bg-amber-50 rounded-lg p-3 text-center border border-amber-200">
-                <Leaf className="w-5 h-5 mx-auto mb-1 text-amber-600" />
-                <div className="text-xs text-gray-600">Fertilisation</div>
-                <div className="text-lg font-bold text-amber-700">{fournituresCalculees.totaux.fertilisation.toFixed(0)} €</div>
-              </div>
-              <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
-                <Shield className="w-5 h-5 mx-auto mb-1 text-blue-600" />
-                <div className="text-xs text-gray-600">Protection</div>
-                <div className="text-lg font-bold text-blue-700">{fournituresCalculees.totaux.protection.toFixed(0)} €</div>
-              </div>
-              <div className="bg-purple-50 rounded-lg p-3 text-center border border-purple-200">
-                <Bug className="w-5 h-5 mx-auto mb-1 text-purple-600" />
-                <div className="text-xs text-gray-600">Bio-traitement</div>
-                <div className="text-lg font-bold text-purple-700">{fournituresCalculees.totaux.biotraitement.toFixed(0)} €</div>
-              </div>
-              <div className="bg-orange-100 rounded-lg p-3 text-center border-2 border-orange-300">
-                <DollarSign className="w-5 h-5 mx-auto mb-1 text-orange-600" />
-                <div className="text-xs text-gray-600 font-medium">TOTAL</div>
-                <div className="text-xl font-bold text-orange-700">{fournituresCalculees.totaux.total.toFixed(0)} €</div>
-              </div>
-            </div>
-
-            {/* Détail par culture */}
-            <h4 className="font-semibold text-gray-700 mb-3">Détail par culture (cliquez sur une valeur pour l'ajuster)</h4>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-collapse">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="px-3 py-2 border text-left">Culture</th>
-                    <th className="px-3 py-2 border text-center">Pl.</th>
-                    <th className="px-3 py-2 border text-right">🌱 Semences</th>
-                    <th className="px-3 py-2 border text-right">🧪 Fertilisation</th>
-                    <th className="px-3 py-2 border text-right">🛡️ Protection</th>
-                    <th className="px-3 py-2 border text-right">🐛 Bio-trait.</th>
-                    <th className="px-3 py-2 border text-right font-bold">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(fournituresCalculees.parCulture).map(([id, data]) => {
-                    const ajust = ajustementsFournitures[id] || {};
-                    const hasAjustSemences = ajust.semences !== undefined;
-                    const hasAjustFertil = ajust.fertilisation !== undefined;
-                    const hasAjustProtec = ajust.protection !== undefined;
-                    const hasAjustBio = ajust.biotraitement !== undefined;
-
-                    return (
-                      <tr key={id} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 border font-medium">{data.nom}</td>
-                        <td className="px-3 py-2 border text-center">{data.planches}</td>
-                        <td className="px-3 py-2 border text-right">
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.5"
-                            value={data.semences.ajuste.toFixed(1)}
-                            onChange={(e) => ajusterFourniture(id, 'semences', e.target.value)}
-                            className={`w-20 px-1 py-0.5 text-right rounded border ${hasAjustSemences ? 'bg-yellow-50 border-yellow-300' : 'border-gray-200'}`}
-                          />
-                          {hasAjustSemences && (
-                            <button 
-                              onClick={() => reinitialiserAjustement(id, 'semences')}
-                              className="ml-1 text-xs text-gray-400 hover:text-red-500"
-                              title="Réinitialiser"
-                            >
-                              ↺
-                            </button>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 border text-right">
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.5"
-                            value={data.fertilisation.ajuste.toFixed(1)}
-                            onChange={(e) => ajusterFourniture(id, 'fertilisation', e.target.value)}
-                            className={`w-20 px-1 py-0.5 text-right rounded border ${hasAjustFertil ? 'bg-yellow-50 border-yellow-300' : 'border-gray-200'}`}
-                          />
-                          {hasAjustFertil && (
-                            <button 
-                              onClick={() => reinitialiserAjustement(id, 'fertilisation')}
-                              className="ml-1 text-xs text-gray-400 hover:text-red-500"
-                              title="Réinitialiser"
-                            >
-                              ↺
-                            </button>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 border text-right">
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.5"
-                            value={data.protection.ajuste.toFixed(1)}
-                            onChange={(e) => ajusterFourniture(id, 'protection', e.target.value)}
-                            className={`w-20 px-1 py-0.5 text-right rounded border ${hasAjustProtec ? 'bg-yellow-50 border-yellow-300' : 'border-gray-200'}`}
-                          />
-                          {hasAjustProtec && (
-                            <button 
-                              onClick={() => reinitialiserAjustement(id, 'protection')}
-                              className="ml-1 text-xs text-gray-400 hover:text-red-500"
-                              title="Réinitialiser"
-                            >
-                              ↺
-                            </button>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 border text-right">
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.5"
-                            value={data.biotraitement.ajuste.toFixed(1)}
-                            onChange={(e) => ajusterFourniture(id, 'biotraitement', e.target.value)}
-                            className={`w-20 px-1 py-0.5 text-right rounded border ${hasAjustBio ? 'bg-yellow-50 border-yellow-300' : 'border-gray-200'}`}
-                          />
-                          {hasAjustBio && (
-                            <button 
-                              onClick={() => reinitialiserAjustement(id, 'biotraitement')}
-                              className="ml-1 text-xs text-gray-400 hover:text-red-500"
-                              title="Réinitialiser"
-                            >
-                              ↺
-                            </button>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 border text-right font-bold text-orange-700">
-                          {data.total.toFixed(0)} €
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot className="bg-orange-100 font-bold">
-                  <tr>
-                    <td className="px-3 py-2 border">TOTAL</td>
-                    <td className="px-3 py-2 border text-center">
-                      {culturesSelectionnees.reduce((s, c) => s + (c.totalPlanches || 0), 0)}
-                    </td>
-                    <td className="px-3 py-2 border text-right text-green-700">{fournituresCalculees.totaux.semences.toFixed(0)} €</td>
-                    <td className="px-3 py-2 border text-right text-amber-700">{fournituresCalculees.totaux.fertilisation.toFixed(0)} €</td>
-                    <td className="px-3 py-2 border text-right text-blue-700">{fournituresCalculees.totaux.protection.toFixed(0)} €</td>
-                    <td className="px-3 py-2 border text-right text-purple-700">{fournituresCalculees.totaux.biotraitement.toFixed(0)} €</td>
-                    <td className="px-3 py-2 border text-right text-orange-800 text-lg">{fournituresCalculees.totaux.total.toFixed(0)} €</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-
-            {/* Note explicative */}
-            <div className="mt-4 p-3 bg-gray-50 rounded-lg text-xs text-gray-500">
-              <Info className="w-4 h-4 inline mr-1" />
-              Les valeurs sont calculées automatiquement selon les chartes de culture. 
-              Cliquez sur une valeur pour l'ajuster manuellement (surlignée en jaune).
-              Le total est répercuté dans l'onglet Résultats.
-            </div>
-          </>
-        )}
-      </Section>
+      {/* Section Fournitures déplacée vers onglet Cultures - V25 */}
     </div>
   );
 };
