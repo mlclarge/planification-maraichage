@@ -176,25 +176,29 @@ const ConfigurationMarche = ({ marche, setMarche, marcheValide, setMarcheValide 
     return ca;
   };
 
-  const caBas = useMemo(() => calculerCA('bas'), [marcheValide]);
+  // 🔧 V25 : CA Bas supprimé (on garde CA Moyen et CA Haut)
   const caMoyen = useMemo(() => calculerCA('moyen'), [marcheValide]);
   const caHaut = useMemo(() => calculerCA('haut'), [marcheValide]);
 
   return (
     <div className="space-y-6">
-      {/* 📱 Alerte de modifications - STICKY en bas sur mobile SEULEMENT */}
+      {/* 📱 Alerte de modifications en attente - STICKY sur mobile */}
       {hasChanges && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 sm:hidden">
-          <div className="bg-orange-50 border-t-4 border-orange-500 p-4 shadow-lg">
-            <div className="flex items-center space-x-3">
-              <AlertCircle className="w-6 h-6 text-orange-600 flex-shrink-0" />
+        <div className="fixed bottom-0 left-0 right-0 z-50 sm:relative sm:bottom-auto sm:left-auto sm:right-auto sm:z-auto">
+          <div className="bg-orange-50 border-t-4 sm:border-2 border-orange-500 sm:rounded-lg p-4 sm:p-6 shadow-lg">
+            <div className="flex items-center sm:items-start space-x-3 sm:space-x-4">
+              <AlertCircle className="w-6 h-6 sm:w-8 sm:h-8 text-orange-600 flex-shrink-0" />
               <div className="flex-1">
-                <h3 className="text-base font-bold text-orange-900 mb-1">
+                <h3 className="text-base sm:text-xl font-bold text-orange-900 mb-1 sm:mb-2">
                   ⚠️ Modifications Non Validées
                 </h3>
+                <p className="hidden sm:block text-orange-800 mb-4">
+                  Vous avez modifié les paramètres du marché mais ces changements n'ont pas encore été appliqués. 
+                  Les calculs des cultures et résultats utilisent toujours l'ancienne configuration.
+                </p>
                 <button
                   onClick={handleValider}
-                  className="w-full bg-orange-600 text-white py-3 px-4 rounded-md font-bold text-base hover:bg-orange-700 transition-colors flex items-center justify-center space-x-2 shadow-md"
+                  className="w-full bg-orange-600 text-white py-3 px-4 sm:px-6 rounded-md font-bold text-base sm:text-lg hover:bg-orange-700 transition-colors flex items-center justify-center space-x-2 shadow-md"
                 >
                   <CheckCircle className="w-5 h-5" />
                   <span>Valider et Recalculer</span>
@@ -411,31 +415,6 @@ const ConfigurationMarche = ({ marche, setMarche, marcheValide, setMarcheValide 
           </div>
         </div>
 
-        {/* 🆕 V24 : Bloc Modifications Non Validées - DESKTOP UNIQUEMENT - Après Configuration */}
-        {hasChanges && (
-          <div className="hidden sm:block mt-6 bg-orange-50 border-2 border-orange-500 rounded-lg p-6">
-            <div className="flex items-start space-x-4">
-              <AlertCircle className="w-8 h-8 text-orange-600 flex-shrink-0" />
-              <div className="flex-1">
-                <h3 className="text-xl font-bold text-orange-900 mb-2">
-                  ⚠️ Modifications Non Validées
-                </h3>
-                <p className="text-orange-800 mb-4">
-                  Vous avez modifié les paramètres du marché mais ces changements n'ont pas encore été appliqués. 
-                  Les calculs des cultures et résultats utilisent toujours l'ancienne configuration.
-                </p>
-                <button
-                  onClick={handleValider}
-                  className="w-full bg-orange-600 text-white py-3 px-6 rounded-md font-bold text-lg hover:bg-orange-700 transition-colors flex items-center justify-center space-x-2 shadow-md"
-                >
-                  <CheckCircle className="w-5 h-5" />
-                  <span>Valider et Recalculer</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Résumé global avec 3 CA - 📱 Accordéon sur mobile */}
         <div className="mt-6 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-gray-300 overflow-hidden">
           <button 
@@ -468,12 +447,7 @@ const ConfigurationMarche = ({ marche, setMarche, marcheValide, setMarcheValide 
                 {(besoinHebdomadaireKg * 21).toFixed(0)}
               </p>
             </div>
-            {/* 🆕 3 CA CONTEXTUELS */}
-            <div className="bg-gradient-to-br from-red-400 to-red-500 rounded-lg p-4 shadow-lg">
-              <p className="text-xs text-red-100 mb-1 font-semibold">CA Bas</p>
-              <p className="text-2xl font-bold text-white">{caBas.toFixed(0)} €</p>
-              <p className="text-xs text-red-100">Volume/RC/Été</p>
-            </div>
+            {/* 🆕 2 CA CONTEXTUELS - V25 : CA Bas supprimé */}
             <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg p-4 shadow-lg">
               <p className="text-xs text-orange-100 mb-1 font-semibold">CA Moyen</p>
               <p className="text-2xl font-bold text-white">{caMoyen.toFixed(0)} €</p>

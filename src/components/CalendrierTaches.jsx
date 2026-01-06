@@ -169,7 +169,8 @@ const CalendrierTaches = ({ culturesSelectionnees, jardins }) => {
           <div className="bg-white rounded-lg p-4 shadow-sm border border-green-100 text-center">
             <div className="text-3xl mb-1">📏</div>
             <div className="text-2xl font-bold text-green-600">{totalPlanches}</div>
-            <div className="text-xs text-gray-600">Planches</div>
+            <div className="text-xs text-gray-600">Planches (brut)</div>
+            <div className="text-[10px] text-gray-400 mt-1">Avant intercalage</div>
           </div>
           <div className="bg-white rounded-lg p-4 shadow-sm border border-blue-100 text-center">
             <div className="text-3xl mb-1">⏱️</div>

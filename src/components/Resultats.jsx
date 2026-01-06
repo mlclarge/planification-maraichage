@@ -123,67 +123,9 @@ const Resultats = ({ marche, jardins, culturesSelectionnees, niveauMaturite = 'd
     };
   }, [marche]);
 
-  // 2. CA PLANIFIÉ (Production réelle × Prix) - Basé sur les cultures planifiées
-  // 🔧 V25 : Utilise totalPlanches au lieu de compter les séries
-  const caPlanifie = useMemo(() => {
-    // Calculer la demande totale par légume sur la saison
-    const demandeSaison = {};
-    for (let semaine = SAISON.debut; semaine <= SAISON.fin; semaine++) {
-      const besoins = calculerBesoinHebdo(marche, semaine);
-      Object.keys(besoins).forEach(legume => {
-        if (!demandeSaison[legume]) demandeSaison[legume] = 0;
-        demandeSaison[legume] += besoins[legume].total;
-      });
-    }
+  // 🔧 V25 : CA Planifié supprimé - On utilise uniquement CA Commercial
 
-    console.log('📊 CA Planifié - Demande saison:', demandeSaison);
-
-    const parCulture = culturesSelectionnees.map(culture => {
-      // 🔧 V25 : Utiliser totalPlanches (calculé par l'algo) au lieu de compter les séries
-      const planchesSaison = culture.totalPlanches || 0;
-      
-      // Récupérer le rendement depuis les données de la culture
-      const rendementParPlanche = culture.rendement?.[`planche${longueurPlanche}m`] 
-        || culture.rendement?.planche15m 
-        || culture.rendement?.planche30m / 2  // Si seulement 30m dispo, diviser par 2
-        || 50; // Fallback
-      
-      const coefficient = niveauConfig.coefficient || 0.7;
-      const productionSaison = planchesSaison * rendementParPlanche * coefficient;
-      
-      const prixUnitaire = culture.prix?.unitaire || prixContextuels.moyen[culture.id] || 3;
-      const demandeLegume = demandeSaison[culture.id] || 0;
-      const productionVendable = Math.min(productionSaison, demandeLegume);
-      const surplus = Math.max(0, productionSaison - demandeLegume);
-      const caSaison = productionVendable * prixUnitaire;
-
-      console.log(`📊 ${culture.nom}: ${planchesSaison} pl × ${rendementParPlanche} kg × ${coefficient} = ${productionSaison.toFixed(0)} kg → CA ${caSaison.toFixed(0)} €`);
-
-      return {
-        id: culture.id,
-        nom: culture.nom,
-        icone: culture.icone,
-        planchesSaison,
-        productionSaison,
-        productionVendable,
-        demandeLegume,
-        surplus,
-        caSaison,
-        prixUnitaire,
-        rendementParPlanche,
-        coefficient
-      };
-    });
-
-    const total = parCulture.reduce((sum, c) => sum + c.caSaison, 0);
-    const surplusTotalKg = parCulture.reduce((sum, c) => sum + c.surplus, 0);
-
-    console.log('📊 CA Planifié TOTAL:', total.toFixed(0), '€');
-
-    return { parCulture, total, surplusTotalKg };
-  }, [culturesSelectionnees, marche, niveauConfig, longueurPlanche]);
-
-  // 3. TOTAUX FINANCIERS - 🔧 V24 FIX
+  // 3. TOTAUX FINANCIERS - 🔧 V25 basé sur CA Commercial
   const totaux = useMemo(() => {
     // 🔧 V24 : Calcul surface avec valeurs par défaut sécurisées
     const surface = jardins.reduce((sum, j) => {
@@ -222,11 +164,11 @@ const Resultats = ({ marche, jardins, culturesSelectionnees, niveauMaturite = 'd
     return {
       surface,
       planches,
-      ca: caPlanifie.total,
+      ca: caCommercial.saison.total, // 🔧 V25 : Utilise CA Commercial au lieu de CA Planifié
       intrantsVariables: intrantsVariablesEstimes,
       intrantsFixes: intrantsFixesEstimes
     };
-  }, [jardins, caPlanifie]);
+  }, [jardins, caCommercial]);
 
   // 🔧 V24 : Configuration salariés (unique source de coût main d'œuvre)
   const coutMainOeuvreTotal = useMemo(() => {
@@ -274,16 +216,11 @@ const Resultats = ({ marche, jardins, culturesSelectionnees, niveauMaturite = 'd
         </div>
         
         {/* KPIs rapides - 📱 Responsive grid */}
-        {/* 🔧 V24 : Clarification CA Planifié vs CA Commercial */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 md:gap-3">
+        {/* 🔧 V25 : CA Commercial uniquement */}
+        <div className="grid grid-cols-3 gap-2 md:gap-3">
           <div className="bg-green-50 p-2 md:p-3 rounded-lg border border-green-200 text-center">
-            <p className="text-xs text-gray-600">CA Planifié</p>
-            <p className="text-lg md:text-xl font-bold text-green-600">{totaux.ca.toLocaleString()} €</p>
-            <p className="text-[10px] text-gray-500">Production réelle</p>
-          </div>
-          <div className="bg-blue-50 p-2 md:p-3 rounded-lg border border-blue-200 text-center">
             <p className="text-xs text-gray-600">CA Commercial</p>
-            <p className="text-lg md:text-xl font-bold text-blue-600">{caCommercial.saison.total.toLocaleString()} €</p>
+            <p className="text-lg md:text-xl font-bold text-green-600">{caCommercial.saison.total.toLocaleString()} €</p>
             <p className="text-[10px] text-gray-500">Demande clients</p>
           </div>
           <div className={`p-2 md:p-3 rounded-lg border text-center ${isRentableOperationnel ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
@@ -299,18 +236,6 @@ const Resultats = ({ marche, jardins, culturesSelectionnees, niveauMaturite = 'd
             </p>
           </div>
         </div>
-        
-        {/* 🔧 V24 : Alerte si écart significatif entre CA Commercial et CA Planifié */}
-        {caCommercial.saison.total > 0 && totaux.ca < caCommercial.saison.total * 0.9 && (
-          <div className="mt-3 p-3 bg-amber-50 border border-amber-300 rounded-lg text-sm">
-            <p className="text-amber-800">
-              <span className="font-bold">⚠️ Écart de {Math.round((1 - totaux.ca / caCommercial.saison.total) * 100)}%</span> entre la demande clients ({caCommercial.saison.total.toLocaleString()} €) et votre production planifiée ({totaux.ca.toLocaleString()} €).
-            </p>
-            <p className="text-amber-700 text-xs mt-1">
-              → Ajoutez des cultures ou augmentez les planches pour répondre à toute la demande.
-            </p>
-          </div>
-        )}
       </div>
 
       {/* 🔧 V24 : Bloc Calcul de Rentabilité CORRIGÉ */}
