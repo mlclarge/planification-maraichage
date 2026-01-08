@@ -1152,17 +1152,14 @@ const SelectionCultures = ({
                                   <option
                                     key={hote.id}
                                     value={hote.id}
-                                    disabled={
-                                      restant < culture.totalPlanches &&
-                                      culture.intercaleAvec !== hote.id
-                                    }
+                                    disabled={false}
                                   >
                                     {hote.nom} ({hote.totalPlanches} pl. -{" "}
                                     {jardinHote?.nom || "non assigné"}) [
-                                    {restant} pl. dispo pour intercalage]
+                                    {restant} pl. dispo]
                                     {restant >= culture.totalPlanches
                                       ? " ✓"
-                                      : " ⚠️"}
+                                      : ` ⚠️ Partiel (${restant}/${culture.totalPlanches})`}
                                   </option>
                                 );
                               })}
@@ -1198,6 +1195,32 @@ const SelectionCultures = ({
                                 </p>
                               </div>
                             )}
+
+                            {estIntercalee &&
+                              cultureHoteAssociee &&
+                              (() => {
+                                const capacite = capaciteIntercalage(
+                                  cultureHoteAssociee
+                                );
+                                const utilise = planchesIntercaleesUtilisees(
+                                  cultureHoteAssociee.id
+                                );
+                                const restant =
+                                  capacite - utilise + culture.totalPlanches;
+                                if (restant < culture.totalPlanches) {
+                                  const manque = culture.totalPlanches - restant;
+                                  return (
+                                    <div className="mt-2 p-2 bg-amber-100 rounded-lg">
+                                      <p className="text-xs text-amber-800">
+                                        <AlertTriangle className="w-3 h-3 inline mr-1" />
+                                        <strong>Intercalage partiel :</strong> {restant} pl. sur {culture.totalPlanches} intercalées.
+                                        Les {manque} pl. restantes doivent être assignées à un jardin.
+                                      </p>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
                           </div>
                         ) : (
                           <div className="ml-5 p-2 bg-orange-100 rounded text-xs text-orange-700">

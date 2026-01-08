@@ -435,16 +435,16 @@ function App() {
       description: "Définissez votre demande",
     },
     {
-      id: "jardins",
-      label: "Jardins",
-      icon: Home,
-      description: "Configurez vos planches",
-    },
-    {
       id: "simulateur",
       label: "Simulateur",
       icon: Sliders,
       description: "Trouvez l'équilibre",
+    },
+    {
+      id: "jardins",
+      label: "Jardins",
+      icon: Home,
+      description: "Configurez vos planches",
     },
     {
       id: "cultures",
