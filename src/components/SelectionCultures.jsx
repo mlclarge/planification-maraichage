@@ -177,6 +177,20 @@ const SelectionCultures = ({
       .reduce((sum, c) => sum + (c.totalPlanches || 0), 0);
   };
 
+  // 🆕 V26 : Calculer le total de planches intercalées pour une culture
+  const getTotalIntercale = (culture) => {
+    if (!culture.intercalageRepartition) return 0;
+    return Object.values(culture.intercalageRepartition).reduce(
+      (s, v) => s + v,
+      0
+    );
+  };
+
+  // 🆕 V26 : Calculer les planches restantes à intercaler
+  const getPlanchesRestantesIntercalage = (culture) => {
+    return culture.totalPlanches - getTotalIntercale(culture);
+  };
+
   // ═══════════════════════════════════════════════════════════════════════
   // RECALCUL AUTOMATIQUE QUAND NIVEAU OU LONGUEUR CHANGE
   // ═══════════════════════════════════════════════════════════════════════
@@ -441,7 +455,8 @@ const SelectionCultures = ({
         totalPlanches: plan.calcul.planchesPhysiques,
         jardinId: null,
         repartition: null,
-        intercaleAvec: null, // 🆕 V24
+        intercaleAvec: null, // 🆕 V24 - ID unique (obsolète, gardé pour compatibilité)
+        intercalageRepartition: {}, // 🆕 V26 - Multi-hôtes : {hoteId: nbPlanches}
       };
 
       setCulturesSelectionnees([...culturesSelectionnees, nouvelleCulture]);
@@ -473,20 +488,51 @@ const SelectionCultures = ({
     );
   };
 
-  // 🆕 V24 : Intercaler avec une culture hôte
-  const intercalerAvec = (cultureId, cultureHoteId) => {
-    console.log(`🔗 V24 Intercalage: ${cultureId} → sur ${cultureHoteId}`);
+  // 🆕 V26 : Intercaler avec plusieurs cultures hôtes
+  const intercalerAvec = (cultureId, cultureHoteId, nombrePlanches = null) => {
+    console.log(
+      `🔗 V26 Intercalage: ${cultureId} → sur ${cultureHoteId} (${nombrePlanches} pl.)`
+    );
+
     setCulturesSelectionnees((prev) =>
-      prev.map((c) =>
-        c.id === cultureId
-          ? {
-              ...c,
-              intercaleAvec: cultureHoteId || null,
-              jardinId: null,
-              repartition: null,
-            }
-          : c
-      )
+      prev.map((c) => {
+        if (c.id !== cultureId) return c;
+
+        // Si on désactive l'intercalage (cultureHoteId = null)
+        if (!cultureHoteId) {
+          return {
+            ...c,
+            intercaleAvec: null,
+            intercalageRepartition: {},
+          };
+        }
+
+        // Copier la répartition existante
+        const nouvelleRepartition = { ...(c.intercalageRepartition || {}) };
+
+        if (nombrePlanches === null || nombrePlanches === 0) {
+          // Supprimer cet hôte
+          delete nouvelleRepartition[cultureHoteId];
+        } else {
+          // Ajouter/modifier cet hôte
+          nouvelleRepartition[cultureHoteId] = nombrePlanches;
+        }
+
+        // Calculer si au moins un hôte est assigné
+        const totalIntercale = Object.values(nouvelleRepartition).reduce(
+          (s, v) => s + v,
+          0
+        );
+
+        return {
+          ...c,
+          intercaleAvec:
+            totalIntercale > 0 ? Object.keys(nouvelleRepartition)[0] : null, // Compatibilité
+          intercalageRepartition: nouvelleRepartition,
+          jardinId: totalIntercale > 0 ? null : c.jardinId,
+          repartition: totalIntercale > 0 ? null : c.repartition,
+        };
+      })
     );
   };
 
@@ -799,7 +845,10 @@ const SelectionCultures = ({
 
           // 🆕 V24 : Déterminer le mode d'affectation
           const peutEtreIntercalee = estIntercalable(culture.id);
-          const estIntercalee = culture.intercaleAvec !== null;
+          const estIntercalee =
+            culture.intercaleAvec !== null ||
+            (culture.intercalageRepartition &&
+              Object.keys(culture.intercalageRepartition).length > 0);
           const cultureHoteAssociee = estIntercalee
             ? culturesSelectionnees.find((c) => c.id === culture.intercaleAvec)
             : null;
@@ -862,22 +911,45 @@ const SelectionCultures = ({
 
                       {/* 🆕 V26 : Alerte si affectation incomplète */}
                       {(() => {
-                        const planchesAssignees = culture.jardinId
-                          ? culture.totalPlanches
-                          : culture.repartition
-                          ? Object.values(culture.repartition).reduce(
-                              (s, v) => s + v,
-                              0
-                            )
-                          : 0;
+                        // Calculer les planches réellement assignées
+                        let planchesAssignees = 0;
+
+                        if (culture.intercaleAvec) {
+                          // Si intercalée, considérer comme assignée
+                          planchesAssignees = culture.totalPlanches;
+                        } else if (
+                          culture.repartition &&
+                          Object.keys(culture.repartition).length > 0
+                        ) {
+                          // Multi-jardins : sommer la répartition
+                          planchesAssignees = Object.values(
+                            culture.repartition
+                          ).reduce((s, v) => s + v, 0);
+                        } else if (culture.jardinId) {
+                          // Jardin unique : vérifier la capacité réelle du jardin
+                          const jardin = jardins.find(
+                            (j) => j.id === culture.jardinId
+                          );
+                          if (jardin) {
+                            const capaciteJardin = jardin.nombrePlanches || 0;
+                            // Planches assignables = min(besoin, capacité)
+                            planchesAssignees = Math.min(
+                              culture.totalPlanches,
+                              capaciteJardin
+                            );
+                          }
+                        }
+
                         const manque =
                           culture.totalPlanches - planchesAssignees;
-                        if (manque > 0 && !culture.intercaleAvec) {
+
+                        if (manque > 0) {
                           return (
                             <div className="bg-amber-50 border border-amber-300 rounded-lg p-2 mt-2 flex items-center text-amber-700 text-sm">
                               <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" />
                               <span>
-                                ⚠️ {manque} planche(s) non assignée(s)
+                                ⚠️ {manque} planche(s) non assignée(s) sur{" "}
+                                {culture.totalPlanches}
                               </span>
                             </div>
                           );
@@ -1119,115 +1191,174 @@ const SelectionCultures = ({
                         </div>
 
                         {culturesHotesDisponibles.length > 0 ? (
-                          <div className="ml-5">
-                            <select
-                              value={culture.intercaleAvec || ""}
-                              onChange={(e) =>
-                                intercalerAvec(
-                                  culture.id,
-                                  e.target.value || null
-                                )
-                              }
-                              className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
-                            >
-                              <option value="">
-                                -- Choisir une culture hôte --
-                              </option>
-                              {culturesHotesDisponibles.map((hote) => {
-                                const capacite = capaciteIntercalage(hote);
-                                const utilise = planchesIntercaleesUtilisees(
-                                  hote.id
-                                );
-                                const restant =
-                                  capacite -
-                                  utilise +
-                                  (culture.intercaleAvec === hote.id
-                                    ? culture.totalPlanches
-                                    : 0);
-                                const jardinHote = jardins.find(
-                                  (j) => j.id === hote.jardinId
-                                );
-
-                                return (
-                                  <option
-                                    key={hote.id}
-                                    value={hote.id}
-                                    disabled={false}
-                                  >
-                                    {hote.nom} ({hote.totalPlanches} pl. -{" "}
-                                    {jardinHote?.nom || "non assigné"}) [
-                                    {restant} pl. dispo]
-                                    {restant >= culture.totalPlanches
-                                      ? " ✓"
-                                      : ` ⚠️ Partiel (${restant}/${culture.totalPlanches})`}
-                                  </option>
-                                );
-                              })}
-                            </select>
-
-                            {estIntercalee && cultureHoteAssociee && (
-                              <div className="mt-2 p-2 bg-green-100 rounded-lg">
-                                <p className="text-xs text-green-800">
-                                  <CheckCircle className="w-3 h-3 inline mr-1" />
-                                  <strong>
-                                    {culture.totalPlanches} planches de{" "}
-                                    {culture.nom}
-                                  </strong>{" "}
-                                  intercalées sur les{" "}
-                                  <strong>
-                                    {cultureHoteAssociee.totalPlanches} planches
-                                    de {cultureHoteAssociee.nom}
-                                  </strong>
-                                  {cultureHoteAssociee.jardinId && (
-                                    <span>
-                                      {" "}
-                                      (
-                                      {
-                                        jardins.find(
-                                          (j) =>
-                                            j.id ===
-                                            cultureHoteAssociee.jardinId
-                                        )?.nom
-                                      }
-                                      )
-                                    </span>
+                          <div className="ml-5 space-y-3">
+                            {/* Afficher la répartition actuelle */}
+                            {culture.intercalageRepartition &&
+                              Object.keys(culture.intercalageRepartition)
+                                .length > 0 && (
+                                <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                                  <p className="text-xs font-medium text-green-800 mb-2">
+                                    📊 Répartition intercalage (
+                                    {getTotalIntercale(culture)}/
+                                    {culture.totalPlanches} pl.)
+                                  </p>
+                                  <div className="space-y-2">
+                                    {Object.entries(
+                                      culture.intercalageRepartition
+                                    ).map(([hoteId, nb]) => {
+                                      const hote = culturesSelectionnees.find(
+                                        (h) => h.id === hoteId
+                                      );
+                                      if (!hote) return null;
+                                      return (
+                                        <div
+                                          key={hoteId}
+                                          className="flex items-center justify-between bg-white p-2 rounded"
+                                        >
+                                          <span className="text-sm">
+                                            {hote.nom}:{" "}
+                                            <strong>{nb} pl.</strong>
+                                          </span>
+                                          <button
+                                            onClick={() =>
+                                              intercalerAvec(
+                                                culture.id,
+                                                hoteId,
+                                                0
+                                              )
+                                            }
+                                            className="text-red-500 hover:bg-red-50 p-1 rounded"
+                                          >
+                                            <X className="w-4 h-4" />
+                                          </button>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                  {getPlanchesRestantesIntercalage(culture) >
+                                    0 && (
+                                    <p className="text-xs text-amber-600 mt-2">
+                                      ⚠️ Reste{" "}
+                                      {getPlanchesRestantesIntercalage(culture)}{" "}
+                                      pl. à intercaler ou assigner
+                                    </p>
                                   )}
-                                </p>
+                                </div>
+                              )}
+
+                            {/* Ajouter un nouvel hôte */}
+                            {getPlanchesRestantesIntercalage(culture) > 0 && (
+                              <div className="flex flex-wrap gap-2 items-end">
+                                <div className="flex-1 min-w-[150px]">
+                                  <label className="text-xs text-gray-600 block mb-1">
+                                    Culture hôte
+                                  </label>
+                                  <select
+                                    id={`select-hote-${culture.id}`}
+                                    className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                                    defaultValue=""
+                                  >
+                                    <option value="">-- Choisir --</option>
+                                    {culturesHotesDisponibles.map((hote) => {
+                                      const capacite =
+                                        capaciteIntercalage(hote);
+                                      const utilise =
+                                        planchesIntercaleesUtilisees(hote.id);
+                                      const dejaAssigne =
+                                        culture.intercalageRepartition?.[
+                                          hote.id
+                                        ] || 0;
+                                      const restant =
+                                        capacite - utilise + dejaAssigne;
+                                      const jardinHote = jardins.find(
+                                        (j) => j.id === hote.jardinId
+                                      );
+
+                                      return (
+                                        <option
+                                          key={hote.id}
+                                          value={hote.id}
+                                          disabled={restant <= 0}
+                                        >
+                                          {hote.nom} (
+                                          {jardinHote?.nom || "non assigné"}) [
+                                          {restant} pl. dispo]
+                                        </option>
+                                      );
+                                    })}
+                                  </select>
+                                </div>
+                                <div className="w-20">
+                                  <label className="text-xs text-gray-600 block mb-1">
+                                    Nb pl.
+                                  </label>
+                                  <input
+                                    type="number"
+                                    id={`input-nb-${culture.id}`}
+                                    min="1"
+                                    max={getPlanchesRestantesIntercalage(
+                                      culture
+                                    )}
+                                    defaultValue={Math.min(
+                                      getPlanchesRestantesIntercalage(culture),
+                                      5
+                                    )}
+                                    className="w-full px-2 py-2 border rounded-lg text-sm"
+                                  />
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    const selectEl = document.getElementById(
+                                      `select-hote-${culture.id}`
+                                    );
+                                    const inputEl = document.getElementById(
+                                      `input-nb-${culture.id}`
+                                    );
+                                    const hoteId = selectEl?.value;
+                                    const nb = parseInt(inputEl?.value) || 0;
+                                    if (hoteId && nb > 0) {
+                                      const existant =
+                                        culture.intercalageRepartition?.[
+                                          hoteId
+                                        ] || 0;
+                                      intercalerAvec(
+                                        culture.id,
+                                        hoteId,
+                                        existant + nb
+                                      );
+                                      selectEl.value = "";
+                                    }
+                                  }}
+                                  className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                                >
+                                  Ajouter
+                                </button>
                               </div>
                             )}
 
-                            {estIntercalee &&
-                              cultureHoteAssociee &&
-                              (() => {
-                                const capacite = capaciteIntercalage(
-                                  cultureHoteAssociee
-                                );
-                                const utilise = planchesIntercaleesUtilisees(
-                                  cultureHoteAssociee.id
-                                );
-                                const restant =
-                                  capacite - utilise + culture.totalPlanches;
-                                if (restant < culture.totalPlanches) {
-                                  const manque = culture.totalPlanches - restant;
-                                  return (
-                                    <div className="mt-2 p-2 bg-amber-100 rounded-lg">
-                                      <p className="text-xs text-amber-800">
-                                        <AlertTriangle className="w-3 h-3 inline mr-1" />
-                                        <strong>Intercalage partiel :</strong> {restant} pl. sur {culture.totalPlanches} intercalées.
-                                        Les {manque} pl. restantes doivent être assignées à un jardin.
-                                      </p>
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              })()}
+                            {/* Message si tout est intercalé */}
+                            {getPlanchesRestantesIntercalage(culture) === 0 &&
+                              getTotalIntercale(culture) > 0 && (
+                                <div className="p-2 bg-green-100 rounded-lg">
+                                  <p className="text-xs text-green-800">
+                                    <CheckCircle className="w-3 h-3 inline mr-1" />
+                                    <strong>Intercalage complet !</strong>{" "}
+                                    {culture.totalPlanches} pl. réparties sur{" "}
+                                    {
+                                      Object.keys(
+                                        culture.intercalageRepartition
+                                      ).length
+                                    }{" "}
+                                    culture(s) hôte(s)
+                                  </p>
+                                </div>
+                              )}
                           </div>
                         ) : (
                           <div className="ml-5 p-2 bg-orange-100 rounded text-xs text-orange-700">
                             <AlertCircle className="w-3 h-3 inline mr-1" />
                             Aucune culture hôte (tomate, aubergine, concombre,
-                            poivron) sélectionnée. Ajoutez d'abord une culture
-                            longue pour pouvoir intercaler des cultures rapides.
+                            poivron) sélectionnée.
                           </div>
                         )}
                       </div>
@@ -1443,18 +1574,48 @@ const SelectionCultures = ({
                 );
               })}
 
-              <div className="p-3 bg-blue-50 rounded-lg">
-                <p className="text-sm">
-                  <strong>Total réparti :</strong>{" "}
-                  {Object.values(repartitionTemp).reduce((s, v) => s + v, 0)} /
-                  {
-                    culturesSelectionnees.find(
-                      (c) => c.id === modalRepartition.cultureId
-                    )?.totalPlanches
-                  }{" "}
-                  planches
-                </p>
-              </div>
+              {(() => {
+                const totalReparti = Object.values(repartitionTemp).reduce(
+                  (s, v) => s + v,
+                  0
+                );
+                const besoin =
+                  culturesSelectionnees.find(
+                    (c) => c.id === modalRepartition.cultureId
+                  )?.totalPlanches || 0;
+                const isExact = totalReparti === besoin;
+                const isTrop = totalReparti > besoin;
+                const isInsuffisant = totalReparti < besoin && totalReparti > 0;
+
+                return (
+                  <div
+                    className={`p-3 rounded-lg ${
+                      isExact
+                        ? "bg-green-50 border border-green-300"
+                        : isTrop
+                        ? "bg-red-50 border border-red-300"
+                        : "bg-blue-50"
+                    }`}
+                  >
+                    <p
+                      className={`text-sm font-medium ${
+                        isExact
+                          ? "text-green-700"
+                          : isTrop
+                          ? "text-red-700"
+                          : ""
+                      }`}
+                    >
+                      <strong>Total réparti :</strong> {totalReparti} / {besoin}{" "}
+                      planches
+                      {isExact && " ✓"}
+                      {isTrop &&
+                        ` ⚠️ Trop de ${totalReparti - besoin} planche(s) !`}
+                      {isInsuffisant && ` (manque ${besoin - totalReparti})`}
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="p-4 border-t flex justify-end gap-2">
@@ -1464,12 +1625,31 @@ const SelectionCultures = ({
               >
                 Annuler
               </button>
-              <button
-                onClick={validerRepartition}
-                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-              >
-                Valider
-              </button>
+              {(() => {
+                const totalReparti = Object.values(repartitionTemp).reduce(
+                  (s, v) => s + v,
+                  0
+                );
+                const besoin =
+                  culturesSelectionnees.find(
+                    (c) => c.id === modalRepartition.cultureId
+                  )?.totalPlanches || 0;
+                const isValide = totalReparti === besoin;
+
+                return (
+                  <button
+                    onClick={validerRepartition}
+                    disabled={!isValide}
+                    className={`px-4 py-2 rounded-lg transition-colors ${
+                      isValide
+                        ? "bg-blue-500 text-white hover:bg-blue-600"
+                        : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    }`}
+                  >
+                    Valider {!isValide && `(${totalReparti}/${besoin})`}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>
